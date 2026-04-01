@@ -14,6 +14,8 @@ interface OutboxJob {
 
 const POLL_INTERVAL_MS = 1_000;
 const MAX_ATTEMPTS = 3;
+const STALE_TIMEOUT_MINUTES = 5;
+const RECOVERY_INTERVAL_ITERATIONS = 30; // ~30 seconds at 1s poll
 
 let running = false;
 
@@ -23,8 +25,7 @@ let running = false;
  * Polls the outbox_jobs table for pending jobs using FOR UPDATE SKIP LOCKED
  * to support concurrent workers without double-processing.
  *
- * Job processing is asynchronous — the worker loop claims a job, updates its
- * status to 'processing', then executes the handler outside the claim transaction.
+ * Periodically recovers stale jobs stuck in 'processing' (crash recovery).
  *
  * Phase 1: the message.process handler is a stub (no LLM calls — Phase 2+).
  */
@@ -47,8 +48,15 @@ export function stopWorker(): void {
 }
 
 async function poll(): Promise<void> {
+  let iterations = 0;
   while (running) {
     try {
+      // Run stale recovery periodically (not on first iteration — give peers
+      // time to finish before reclaiming their jobs on a fresh start)
+      if (iterations > 0 && iterations % RECOVERY_INTERVAL_ITERATIONS === 0) {
+        await recoverStaleJobs();
+      }
+
       const processed = await processOne();
       if (!processed) {
         // No pending jobs — wait before next poll
@@ -59,6 +67,38 @@ async function poll(): Promise<void> {
       logger.error({ err }, "Worker: unexpected error in poll loop");
       await sleep(POLL_INTERVAL_MS);
     }
+    iterations++;
+  }
+}
+
+/**
+ * Recover jobs stuck in 'processing' for longer than STALE_TIMEOUT_MINUTES.
+ *
+ * Jobs under MAX_ATTEMPTS are reset to 'pending' for retry.
+ * Jobs at or above MAX_ATTEMPTS are marked 'failed'.
+ *
+ * Safe against active workers: the CAS on `attempts` in processOne() ensures
+ * a late-finishing worker's status update is a no-op if the job was recovered
+ * and re-claimed at a higher attempt count.
+ */
+async function recoverStaleJobs(): Promise<void> {
+  const db = getDb();
+  const { rows } = await db.query<{ id: string; status: string }>(
+    `UPDATE outbox_jobs
+     SET status = CASE WHEN attempts >= $1 THEN 'failed' ELSE 'pending' END,
+         last_error = 'recovered: stale processing timeout',
+         updated_at = now()
+     WHERE status = 'processing'
+       AND updated_at < now() - INTERVAL '${STALE_TIMEOUT_MINUTES} minutes'
+     RETURNING id, status`,
+    [MAX_ATTEMPTS]
+  );
+
+  for (const row of rows) {
+    logger.warn(
+      { jobId: row.id, newStatus: row.status },
+      "Worker: recovered stale processing job"
+    );
   }
 }
 
@@ -112,7 +152,9 @@ async function processOne(): Promise<boolean> {
   // TypeScript narrowing guard — unreachable in practice (catch block returns false)
   if (!job) return false;
 
-  // currentAttempts reflects the incremented value now recorded in DB
+  // currentAttempts reflects the incremented value now recorded in DB.
+  // Used as a CAS token in post-processing status updates to prevent a
+  // recovered-and-re-claimed job from being clobbered by a stale worker.
   const currentAttempts = job.attempts + 1;
 
   // Restore OTel trace context from the job payload to link this span to ingest
@@ -144,7 +186,9 @@ async function processOne(): Promise<boolean> {
     );
   }
 
-  // Update job status after processing (outside the span)
+  // Update job status after processing.
+  // CAS on `attempts` prevents clobbering if recovery reset the job and
+  // another worker re-claimed it at a higher attempt count.
   if (processError) {
     const errorMessage =
       processError instanceof Error
@@ -156,9 +200,17 @@ async function processOne(): Promise<boolean> {
       .query(
         `UPDATE outbox_jobs
          SET status = $1, last_error = $2, updated_at = now()
-         WHERE id = $3`,
-        [newStatus, errorMessage, job.id]
+         WHERE id = $3 AND attempts = $4`,
+        [newStatus, errorMessage, job.id, currentAttempts]
       )
+      .then((result) => {
+        if (result.rowCount === 0) {
+          logger.warn(
+            { jobId: job.id, attempts: currentAttempts },
+            "Worker: CAS miss on job failure update — job was likely recovered and re-claimed"
+          );
+        }
+      })
       .catch((dbErr) =>
         logger.error(
           { dbErr, jobId: job.id },
@@ -168,9 +220,18 @@ async function processOne(): Promise<boolean> {
   } else {
     await db
       .query(
-        `UPDATE outbox_jobs SET status = 'done', updated_at = now() WHERE id = $1`,
-        [job.id]
+        `UPDATE outbox_jobs SET status = 'done', updated_at = now()
+         WHERE id = $1 AND attempts = $2`,
+        [job.id, currentAttempts]
       )
+      .then((result) => {
+        if (result.rowCount === 0) {
+          logger.warn(
+            { jobId: job.id, attempts: currentAttempts },
+            "Worker: CAS miss on job done update — job was likely recovered and re-claimed"
+          );
+        }
+      })
       .catch((dbErr) =>
         logger.error(
           { dbErr, jobId: job.id },

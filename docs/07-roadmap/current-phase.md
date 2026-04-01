@@ -35,12 +35,16 @@ The structural monorepo skeleton (apps, packages, docs) is done. The runtime wor
 - [x] OpenTelemetry bootstrap (NodeSDK + withSpan/startSpan/extractTraceContext helpers)
 - [x] JWT auth middleware (jose, requireAuth — OIDC not yet wired end-to-end)
 
+### Done (Phase 1 reliability slice)
+- [x] Channel-to-org DB lookup in webhook handler (route: `/webhooks/inbound/:channelId`)
+- [x] MessageSid idempotency dedup via delivery_id column + ON CONFLICT DO NOTHING
+- [x] Stale processing job recovery (5-minute timeout, periodic sweep in worker)
+- [x] CAS on attempts for post-processing status updates (prevents recovery race)
+
 ### Not Yet Done (remaining Phase 1 runtime work)
 - [ ] OIDC login for dashboard (OAuth 2.0 / RFC 9700) — end-to-end flow
 - [ ] RBAC: permission checks enforced at repository layer
 - [ ] Rate limiting on public ingest endpoints
-- [ ] MessageSid idempotency dedup check in webhook ingest
-- [ ] Channel-to-org DB lookup in webhook handler (currently uses `?orgId=` query param placeholder)
 - [ ] Audit log for login, logout, role change, channel binding events
 
 ---

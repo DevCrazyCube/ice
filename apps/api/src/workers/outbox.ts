@@ -126,7 +126,7 @@ async function processOne(): Promise<boolean> {
       withSpan(
         "worker.process",
         {
-          "tenant.id": job.organisation_id,
+          "organisation.id": job.organisation_id,
           "job.type": job.type,
           "job.id": job.id,
           "job.attempts": currentAttempts,

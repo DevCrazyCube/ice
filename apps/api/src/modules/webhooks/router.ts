@@ -31,6 +31,11 @@ webhookRouter.post(
     const organisationId =
       typeof req.query["orgId"] === "string" ? req.query["orgId"] : "";
 
+    if (!organisationId) {
+      res.status(400).json({ error: { code: "MISSING_ORG_ID" } });
+      return;
+    }
+
     // Parse the URLSearchParams body Twilio sends
     const bodyString = (req.body as Buffer).toString("utf-8");
     const params: Record<string, string> = {};
@@ -38,9 +43,15 @@ webhookRouter.post(
       params[key] = value;
     });
 
+    const messageSid = params["MessageSid"];
+    if (!messageSid) {
+      res.status(400).json({ error: { code: "MISSING_MESSAGE_SID" } });
+      return;
+    }
+
     // Signature verification — must happen before any processing or logging
     const signature = (req.headers["x-twilio-signature"] as string) ?? "";
-    const url = config.publicWebhookUrl + req.originalUrl;
+    const url = new URL(req.originalUrl, config.publicWebhookUrl).toString();
 
     const isValid = config.twilioAuthToken
       ? validateRequest(config.twilioAuthToken, signature, url, params)
@@ -67,19 +78,18 @@ webhookRouter.post(
     // Durable enqueue BEFORE ACK.
     // Return 500 on failure so Twilio retries delivery.
     try {
+      // TODO(phase-1-idempotency): add MessageSid dedup check against
+      // outbox_jobs payload before enqueuing to prevent duplicate processing
+      // on Twilio retries.
+
       await withSpan(
         "http.ingest",
         {
+          "organisation.id": organisationId,
           "channel.type": "sms",
-          "organisation.id": organisationId || "unknown",
+          "message.sid": messageSid,
         },
         async (_span) => {
-          const messageSid = params["MessageSid"] ?? "";
-
-          // TODO(phase-1-idempotency): add MessageSid dedup check against
-          // outbox_jobs payload before enqueuing to prevent duplicate processing
-          // on Twilio retries.
-
           await enqueue({
             type: "message.process",
             organisationId,

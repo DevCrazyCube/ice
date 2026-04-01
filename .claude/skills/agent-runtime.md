@@ -1,41 +1,75 @@
 # Skill: Agent Runtime
 
-## Status: Not Implemented (Foundation Phase)
+## Phase: 2 — Agent Capabilities
 
-Do not implement agent runtime logic until Phase 3. Read `docs/07-roadmap/current-phase.md` first.
+Do not implement agent runtime logic until Phase 2. Read `docs/07-roadmap/current-phase.md` first.
+Phase 1 (Foundations) must be complete: tenancy, auth, audit, webhook ingest, outbox, worker skeleton, OTel.
 
-## Planned Architecture
+## Architecture
 
 Each conversation is handled by one agent — either `AcquisitionAgent` or `InboundAgent`.
+No generic agent framework. No multi-agent coordination.
 
 ```
-Inbound message
-  → ConversationService.handleMessage(orgId, convId, message)
-    → Load agent config for this conversation
-    → Load conversation history (last N turns)
-    → Build prompt from config + history + message
-    → Call LLM provider
-    → Parse and validate response
-    → Store message + agent reply
-    → Trigger any configured side effects (webhook, escalation)
-    → Return reply
+Outbox job (message.process)
+  → Worker picks up job
+    → ConversationService.processInbound(orgId, convId)
+      → Load AgentSpec for this conversation's agent
+      → Load conversation history (last N turns, bounded)
+      → Build three-layer prompt: SYSTEM (safety) + DEVELOPER (persona) + USER (message)
+      → Call LLM provider
+      → Validate and parse response
+      → Store agent reply
+      → Trigger configured side effects (escalation, webhook)
+      → Enqueue outbound send job
 ```
+
+## Three-Layer Prompt Structure
+
+Safety rules must be in the SYSTEM role. Never in USER role.
+
+| Layer | Role | Content |
+|-------|------|---------|
+| 1 | SYSTEM | Safety constraints, guardrails — cannot be overridden |
+| 2 | DEVELOPER | Agent persona, knowledge, behaviour policy |
+| 3 | USER | End-user message |
+
+```typescript
+const messages = [
+  { role: "system", content: safetyRules },       // hardcoded, not configurable
+  { role: "developer", content: agentPersona },   // from AgentSpec
+  { role: "user", content: userMessage },
+];
+```
+
+## AgentSpec v1
+
+Agent configuration is stored per-organisation in the database.
+See `packages/schemas/src/agent-spec.ts` for the machine-readable contract.
+
+Loaded at conversation start, not on every message.
+
+## Tool Gateway
+
+Tools available to agents are defined in `ToolSpec`. Each tool call:
+- Must be authorised against the agent's allowed tool list
+- Must be logged as a `tool.exec` span (see `observability-tracing.md`)
+- Must be idempotent or compensatable
+
+## OTel Spans (Phase 2 additions)
+
+| Span | Attributes |
+|------|-----------|
+| `llm.call` | `model`, `prompt_tokens`, `completion_tokens`, `latency_ms` |
+| `tool.exec` | `tool_name`, `tool_sensitivity`, `result_status` |
+| `guardrail.check` | `check_type` (input/output), `passed` (bool) |
 
 ## Rules
 
-- No generic agent abstraction — implement what the two products need
-- All LLM calls must include `organization_id` and `conversation_id` in metadata for auditability
-- Conversation history must be truncated to fit context window — do not send unbounded history
+- No LLM calls inside webhook route handlers — always via worker
+- All LLM calls must include `organisation_id` and `conversation_id` in metadata
+- Conversation history must be bounded — do not send unbounded history to LLM
 - Agent responses must be validated before sending to users
-- Escalation must always be possible — every agent must handle "I need to speak to a human"
-- No direct prompt injection from user input — sanitize and structure before including in prompt
-
-## Configuration
-
-Agent configuration (persona, knowledge, escalation rules) is stored per-organization in the database. It is loaded at conversation start, not on every message.
-
-## Cost Awareness
-
-- Use the cheapest model that meets quality requirements
-- Cache system prompts where possible
-- Log token usage per conversation for cost attribution per organization
+- Escalation must always be possible — handle "I need a human" in every agent
+- Never pass raw user input directly into prompt — structure it
+- Use cheapest model that meets quality requirements; log token usage per conversation

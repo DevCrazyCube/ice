@@ -1,37 +1,71 @@
 # Skill: Backend Architecture
 
-## Guiding Principles
+## Core Pattern
 
-ICE uses a **modular monolith** pattern. All backend code lives in `apps/api`. Modules are separated by folder, not by network boundary.
+ICE uses **async webhook ingest + Postgres outbox + worker** as its data plane.
+
+```
+Webhook → verify sig → 200 OK → persist → outbox row → worker → process → outbound
+```
+
+Never block the webhook ACK on processing. Fast ACK is required.
+
+## Planes
+
+**Data plane** (`apps/api/src/modules/` — ingest, conversations, workers):
+- Receives webhooks
+- Writes to outbox
+- Workers read from outbox
+- Sends outbound messages
+
+**Control plane** (`apps/api/src/modules/` — agents, channels, orgs, users):
+- CRUD for agent config, channel config, policy
+- Dashboard API
+- No message processing logic
 
 ## Module Shape
 
-Each domain module in `apps/api/src/modules/<domain>/` should contain:
-
 ```
-modules/conversations/
-  index.ts          # Public API of this module (re-exports only)
-  routes.ts         # Express route handlers for this domain
-  service.ts        # Business logic — no direct db calls here
-  repository.ts     # All database queries for this domain
-  types.ts          # Domain-specific TypeScript types
+modules/<domain>/
+  index.ts        Public API (re-exports only)
+  routes.ts       HTTP handlers
+  service.ts      Business logic
+  repository.ts   SQL queries — always filter by organisation_id
+  types.ts        Domain-local TS types
 ```
 
-## Rules
+## Adding a Module
 
-- **Routes** only parse requests, validate input, call service, return response
-- **Service** contains business logic; calls repository with orgId
-- **Repository** contains SQL; always filters by `organization_id`
-- Modules do NOT call each other's repositories — only each other's services (via explicit interface)
-- No circular dependencies between modules
+See `.claude/commands/add-module.md`.
 
-## Adding a New Module
+Rules:
+- Repository functions always accept and apply `organisation_id`
+- Modules do not call each other's repositories — service-to-service only
+- No SQL in route handlers; no HTTP logic in service layer
+- Workers are in `modules/<domain>/worker.ts`, not in routes
 
-See `.claude/commands/add-module.md`
+## Outbox Worker Pattern
+
+```typescript
+// Polling worker (simplified)
+async function runWorker() {
+  while (true) {
+    const job = await outboxRepo.claimNext(workerConfig.batchSize);
+    if (!job) { await sleep(1000); continue; }
+    try {
+      await processJob(job);
+      await outboxRepo.markDone(job.id);
+    } catch (err) {
+      await outboxRepo.markFailed(job.id, err.message, job.attempts + 1);
+    }
+  }
+}
+```
 
 ## Anti-Patterns
 
-- Putting SQL in route handlers
-- Putting HTTP response logic in service layer
-- Creating a module with vague responsibility (e.g., `helpers/`, `utils/`)
-- Bypassing a module's public interface
+- LLM call inside a webhook route handler
+- Redis queue before the outbox pattern is proven insufficient
+- SQL in route handlers
+- HTTP response logic in service layer
+- Module importing another module's repository directly

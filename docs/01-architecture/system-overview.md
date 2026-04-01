@@ -1,87 +1,167 @@
 # System Overview
 
-## Architecture Style
+## Core Architectural Pattern
 
-ICE is a **modular monolith**. All backend logic runs in a single deployable unit (`apps/api`). Modules are separated by folder, not by service boundary.
+ICE uses **event-driven ingestion with asynchronous processing** as its primary architectural pattern.
 
-We do NOT use microservices in this phase. Microservice decomposition is deferred until there is a proven need for independent scaling or team separation.
+This is both a cost-control and security decision. OWASP API Security Top 10 (2023) explicitly identifies "Unrestricted Resource Consumption" — including costs paid per API request (SMS, LLM tokens) — as a top API risk. Asynchronous pipelines enforce budgets, retries, and backpressure.
 
 ---
 
-## Application Boundaries
+## Control Plane vs Data Plane
+
+ICE separates two planes from the beginning:
+
+### Data Plane
+Handles the message processing pipeline:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    apps/web (Next.js)                │
-│   - Marketing / auth pages                          │
-│   - Client dashboard                                │
-│   - Talks to apps/api over HTTP                     │
-└────────────────────┬────────────────────────────────┘
-                     │ HTTP/REST
-┌────────────────────▼────────────────────────────────┐
-│                    apps/api (Express)                │
-│   - REST API                                        │
-│   - Business logic modules                          │
-│   - Job queue workers (future)                      │
-│   - Tenant isolation enforced here                  │
-└──────┬──────────────────────────────────┬───────────┘
-       │                                  │
-┌──────▼──────┐                  ┌────────▼────────┐
-│  Postgres   │                  │  Redis (future) │
-│  (future)   │                  │  Job queue      │
-└─────────────┘                  └─────────────────┘
+Channel webhook
+  → Ingest API  (verify signature, fast 200 ACK)
+  → Postgres    (persist message event)
+  → Outbox/Queue (enqueue job reference)
+  → Worker      (load conversation + policy, call LLM, send reply)
+  → Tool Gateway (schema-validated tool execution — Phase 2+)
+  → Outbound Sender (send reply via channel provider)
+```
+
+**Data plane rule:** never block the webhook ACK on LLM processing. Acknowledge fast, process asynchronously.
+
+### Control Plane
+Handles configuration, policy, and observability:
+
+```
+Dashboard (web)
+  → Admin API
+  → Policy/Config store (Postgres)
+  → Audit log (Postgres, append-only)
+```
+
+**Control plane rule:** no message processing logic here. CRUD for agents, channels, policies, and knowledge.
+
+---
+
+## System Diagram
+
+```
+┌───────────────────────────────────────────────────────────┐
+│  CONTROL PLANE                                            │
+│  apps/web (Dashboard) ──► apps/api (Admin API)           │
+│                              │           │               │
+│                           Config      Audit log          │
+└──────────────────────────────┼───────────────────────────┘
+                               │
+┌──────────────────────────────▼───────────────────────────┐
+│  DATA PLANE                                               │
+│                                                           │
+│  Channel  ──► Ingest API ──► Postgres ──► Outbox         │
+│                                              │            │
+│                                           Worker          │
+│                                           │    │          │
+│                                       pgvector  Tool GW   │
+│                                              │            │
+│                                        Outbound Sender    │
+└───────────────────────────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼───────────────────────────┐
+│  OBSERVABILITY                                            │
+│  OpenTelemetry Collector ──► OTLP export                 │
+│  (traces from: ingest, worker, tool calls, outbound)     │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Module Boundaries (apps/api)
+## Webhook Ingest Flow (Sequence)
 
-Each module in `apps/api/src/modules/` owns:
-- Its own route handlers (or re-exports them to `routes/`)
-- Its own service layer (business logic)
-- Its own data access layer (queries with `organization_id`)
+```
+Provider ──► POST /webhooks/inbound (signed)
+              │
+              ▼
+         Verify signature + rate limit
+              │
+              ▼
+         Persist message event (Postgres)
+              │
+              ▼
+         Enqueue job ref (outbox table)
+              │
+              └──► 200 OK (fast)
 
-Modules do NOT call each other's data layers directly. They communicate through explicit service interfaces or shared types.
-
----
-
-## Data Tenancy
-
-Every database query that returns business data must be scoped by `organization_id`.
-
-```typescript
-// Correct
-db.query("SELECT * FROM conversations WHERE organization_id = $1", [orgId])
-
-// Never
-db.query("SELECT * FROM conversations")
+Outbox ──► Worker
+              │
+              ▼
+         Load conversation + policy
+              │
+              ▼
+         Process (Phase 2: LLM + tools)
+              │
+              ▼
+         Persist reply + audit event
+              │
+              ▼
+         Outbound sender
 ```
 
 ---
 
-## Shared Packages
+## Dependency-Light Defaults
 
-| Package | Purpose |
-|---------|---------|
-| `@ice/core` | DB, queue, telemetry, security primitives |
-| `@ice/schemas` | Zod schemas and TypeScript types |
-| `@ice/config` | Shared config helpers |
-| `@ice/agents` | Agent runtime (future) |
+| Component | Default | Notes |
+|-----------|---------|-------|
+| Ingest API | Express (app runtime) | Fast ACK, verify signatures |
+| Primary store | Postgres (1 managed DB) | Tenancy + audit + outbox + vectors (pgvector) |
+| Queue | Postgres outbox table | Workers poll outbox; no separate queue service in Phase 1 |
+| Optional Redis | Rate limits + idempotency keys | Introduced only when load demands it |
+| Vectors | pgvector in Postgres | Avoids extra managed service through Phase 2 |
+| Dashboard | Next.js (same monorepo) | CRUD config only in Phase 1 |
+
+---
+
+## Monorepo App Boundaries
+
+```
+apps/api      Data plane ingest + control plane Admin API + workers
+apps/web      Control plane dashboard
+
+packages/core       DB client, queue/outbox, telemetry, security helpers
+packages/schemas    Zod schemas, TS types, machine-readable contracts
+packages/config     Shared configuration helpers
+packages/agents     Agent runtime (Phase 2+)
+```
 
 Packages do NOT import from `apps/`. Apps may import from packages.
 
 ---
 
-## Request Lifecycle (future)
+## Module Structure (apps/api)
+
+Each domain in `apps/api/src/modules/<domain>/`:
 
 ```
-1. HTTP request → Express router
-2. Auth middleware → verify JWT, attach org context
-3. Route handler → validate input with zod schema
-4. Service layer → business logic, calls data layer with orgId
-5. Data layer → Postgres query scoped by organization_id
-6. Response → serialize with schema, return JSON
+modules/conversations/
+  index.ts          Public API of this module (re-exports only)
+  routes.ts         HTTP handlers
+  service.ts        Business logic (no direct DB calls)
+  repository.ts     SQL queries — always filter by organization_id
+  types.ts          Domain-local TypeScript types
 ```
+
+Modules do NOT call each other's repositories. They use each other's service interfaces.
+
+---
+
+## Observability Standard
+
+All spans, metrics, and logs use **OpenTelemetry + OTLP** from Phase 1 onward.
+
+Core semantic attributes (stable across all phases):
+- `tenant_id` — organization_id
+- `conversation_id` — conversation UUID
+- `run_id` — agent run UUID (Phase 2+)
+- `channel_type` — sms | web | voice
+
+Trace IDs propagate from ingest → worker → outbound.
 
 ---
 
@@ -89,7 +169,8 @@ Packages do NOT import from `apps/`. Apps may import from packages.
 
 | Decision | Choice | Reason |
 |----------|--------|--------|
-| Monolith vs microservices | Monolith | Simpler ops, lower cost, adequate for current scale |
-| Framework | Express | Minimal, no magic, easy to understand |
-| ORM | None (yet) | Raw SQL with pg is sufficient and more explicit |
-| Auth | JWT (future) | Stateless, standard |
+| Async webhook processing | Outbox → worker | Cost control, retries, DoS protection |
+| Single datastore | Postgres + pgvector | Minimal ops, simple tenancy, vectors included |
+| Redis | Optional | Only for rate-limit + idempotency; not required in Phase 1 |
+| Auth | OIDC + JWT (Phase 1) | Standard; RFC 9700 security BCP |
+| Microservices | No | Modular monolith first; decompose only if proven need |

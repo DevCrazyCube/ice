@@ -1,3 +1,9 @@
+import { config as dotenvConfig } from "dotenv";
+import { resolve } from "node:path";
+
+// Load root .env for local development. Does not override existing env vars.
+dotenvConfig({ path: resolve(import.meta.dirname, "../../../../.env") });
+
 const required = (key: string): string => {
   const val = process.env[key];
   if (!val) throw new Error(`Missing required env var: ${key}`);

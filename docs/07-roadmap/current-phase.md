@@ -41,11 +41,15 @@ The structural monorepo skeleton (apps, packages, docs) is done. The runtime wor
 - [x] Stale processing job recovery (5-minute timeout, periodic sweep in worker)
 - [x] CAS on attempts for post-processing status updates (prevents recovery race)
 
+### Done (Phase 1 auth / RBAC / rate-limiting slice)
+- [x] OIDC login for dashboard (OAuth 2.0 / RFC 9700) — end-to-end flow (BFF pattern, PKCE, session JWT in HttpOnly cookie)
+- [x] RBAC: `requireAuth` + `requireRole()` middleware enforced on protected routes; `platform_admin` bypass; tenant isolation via `req.orgId` scoping
+- [x] Rate limiting on public ingest endpoints — in-memory fixed-window per-org (60 req/min), 429 + Retry-After header. ⚠️ Single-instance only, not distributed.
+- [x] Audit events wired for `user.login`, `user.logout`, `channel.created`
+- [x] Minimal channel CRUD (`POST /api/v1/channels` org_admin, `GET /api/v1/channels` org_member+) — org-scoped, cross-org = 404
+
 ### Not Yet Done (remaining Phase 1 runtime work)
-- [ ] OIDC login for dashboard (OAuth 2.0 / RFC 9700) — end-to-end flow
-- [ ] RBAC: permission checks enforced at repository layer
-- [ ] Rate limiting on public ingest endpoints
-- [ ] Audit log for login, logout, role change, channel binding events
+- [ ] Audit log for role change events (requires user/role management routes — Phase 2+)
 
 ---
 

@@ -15,10 +15,18 @@ export const config = {
   // Database — required when DB is initialised
   databaseUrl: optional("DATABASE_URL", ""),
 
-  // OIDC — required for auth middleware
+  // OIDC provider — required for login flow
   oidcIssuer: optional("OIDC_ISSUER", ""),
   oidcJwksUrl: optional("OIDC_JWKS_URL", ""),
   oidcAudience: optional("OIDC_AUDIENCE", "ice-api"),
+  oidcClientId: optional("OIDC_CLIENT_ID", ""),
+  oidcClientSecret: optional("OIDC_CLIENT_SECRET", ""),
+  oidcRedirectUri: optional("OIDC_REDIRECT_URI", "http://localhost:3001/auth/callback"),
+  oidcTokenUrl: optional("OIDC_TOKEN_URL", ""),
+  oidcAuthorizationUrl: optional("OIDC_AUTHORIZATION_URL", ""),
+
+  // Session — symmetric key for signing session JWTs (HS256, min 32 chars)
+  sessionSecret: optional("SESSION_SECRET", ""),
 
   // Twilio — required for webhook signature verification
   twilioAuthToken: optional("TWILIO_AUTH_TOKEN", ""),

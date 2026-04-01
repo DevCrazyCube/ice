@@ -3,6 +3,7 @@ import { validateRequest } from "twilio";
 import { enqueue, getDb, recordAuditEvent, withSpan } from "@ice/core";
 import { config } from "../../lib/config.js";
 import { logger } from "../../lib/logger.js";
+import { createRateLimiter } from "../../lib/rate-limit.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -14,6 +15,14 @@ interface ChannelRow {
 }
 
 export const webhookRouter: Router = express.Router();
+
+/**
+ * Per-organisation rate limiter for inbound webhooks.
+ * Fixed window: 60 requests per minute per organisation.
+ *
+ * ⚠️  Single-instance only — see rate-limit.ts for details.
+ */
+const webhookLimiter = createRateLimiter(60_000, 60);
 
 /**
  * POST /webhooks/inbound/:channelId
@@ -65,6 +74,14 @@ webhookRouter.post(
 
     const organisationId = channel.organisation_id;
     const agentId = channel.agent_id;
+
+    // Rate limit — per organisation, before signature verification
+    const { allowed, retryAfterMs } = webhookLimiter.check(organisationId);
+    if (!allowed) {
+      res.set("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
+      res.status(429).json({ error: { code: "RATE_LIMITED" } });
+      return;
+    }
 
     // Parse the URLSearchParams body Twilio sends
     const bodyString = (req.body as Buffer).toString("utf-8");

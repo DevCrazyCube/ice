@@ -24,15 +24,24 @@ The structural monorepo skeleton (apps, packages, docs) is done. The runtime wor
 - [x] docs/ (all architecture, security, roadmap docs)
 - [x] .claude/ (skills and commands)
 
-### Not Yet Done (Phase 1 runtime work)
-- [ ] Multi-tenant data model + Postgres schema + migrations
-- [ ] OIDC login for dashboard (OAuth 2.0 / RFC 9700)
-- [ ] RBAC: roles, user_roles, permission checks
-- [ ] Webhook ingest endpoint with signature verification (Twilio `X-Twilio-Signature`)
-- [ ] Rate limiting on all public ingest endpoints
-- [ ] Postgres outbox table + worker polling skeleton
-- [ ] Audit log baseline (login, role change, channel binding)
-- [ ] OpenTelemetry tracing baseline (OTLP export, core semantic attributes)
+### Done (Phase 1 runtime skeleton)
+- [x] Multi-tenant data model + Postgres schema + migrations (001–006)
+- [x] Postgres DB client (pg Pool singleton, initDb/getDb/closeDb)
+- [x] Migration runner (schema_migrations tracking, lexicographic order, transactional)
+- [x] Postgres outbox table + enqueue() with OTel trace context injection
+- [x] Worker polling skeleton (FOR UPDATE SKIP LOCKED, 3-attempt retry, OTel span)
+- [x] Twilio SMS webhook ingest skeleton (signature verify → durable enqueue → audit → 200 ACK)
+- [x] Audit event writer (INSERT-only, recordAuditEvent)
+- [x] OpenTelemetry bootstrap (NodeSDK + withSpan/startSpan/extractTraceContext helpers)
+- [x] JWT auth middleware (jose, requireAuth — OIDC not yet wired end-to-end)
+
+### Not Yet Done (remaining Phase 1 runtime work)
+- [ ] OIDC login for dashboard (OAuth 2.0 / RFC 9700) — end-to-end flow
+- [ ] RBAC: permission checks enforced at repository layer
+- [ ] Rate limiting on public ingest endpoints
+- [ ] MessageSid idempotency dedup check in webhook ingest
+- [ ] Channel-to-org DB lookup in webhook handler (currently uses `?orgId=` query param placeholder)
+- [ ] Audit log for login, logout, role change, channel binding events
 
 ---
 
@@ -47,7 +56,7 @@ The structural monorepo skeleton (apps, packages, docs) is done. The runtime wor
 
 Everything in the deliverables list above and:
 - Webhook ingest for one initial channel (SMS/WhatsApp **or** web chat — pick one to launch)
-- Fast-ACK pattern: webhook handler returns `200 OK` before any processing
+- Durable-enqueue-then-ACK: webhook handler persists job to Postgres outbox first, then returns `200 OK`; job processing is asynchronous via worker
 - Postgres outbox as the Phase 1 queue (no Redis queue in this phase)
 - Optional Redis for rate-limiting and idempotency key storage only
 - Audit events for: login, logout, org create, agent create, channel bind, webhook received

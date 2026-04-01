@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx --import ./src/lib/telemetry.ts watch src/main.ts",
+    "dev": "tsx watch --import ./src/lib/telemetry.ts src/main.ts",
     "build": "tsc",
     "start": "node --import ./dist/lib/telemetry.js dist/main.js",
     "typecheck": "tsc --noEmit",

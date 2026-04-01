@@ -30,8 +30,16 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => void shutdown());
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`Fatal startup error: ${message}\n`);
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection:", reason);
+});
+
+main().catch((err) => {
+  console.error("Fatal startup error:", err);
+  console.dir(err, { depth: 10 });
   process.exit(1);
 });

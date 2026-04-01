@@ -1,5 +1,5 @@
 import express, { type Router } from "express";
-import { validateRequest } from "twilio";
+import twilio from "twilio";
 import { enqueue, getDb, recordAuditEvent, withSpan } from "@ice/core";
 import { config } from "../../lib/config.js";
 import { logger } from "../../lib/logger.js";
@@ -101,7 +101,7 @@ webhookRouter.post(
     const url = new URL(req.originalUrl, config.publicWebhookUrl).toString();
 
     const isValid = config.twilioAuthToken
-      ? validateRequest(config.twilioAuthToken, signature, url, params)
+      ? twilio.validateRequest(config.twilioAuthToken, signature, url, params)
       : false;
 
     if (!isValid) {

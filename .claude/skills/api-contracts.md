@@ -36,7 +36,7 @@ All routes live under `/api/v1/`. When breaking changes are required, bump to `/
 
 ## Rules
 
-- No route returns data from a different organization than the requester
+- No route returns data from a different organisation than the requester
 - All errors include a `code` (machine-readable) and `message` (human-readable)
 - Sensitive fields (passwords, tokens) must never appear in responses
 - Date fields are ISO 8601 strings

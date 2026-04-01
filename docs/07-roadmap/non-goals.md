@@ -60,7 +60,7 @@ These will never be part of ICE:
 - Speculative exports that nothing imports
 - `console.log` instead of the pino structured logger
 - Hardcoded secrets or tokens
-- Cross-tenant queries (missing `organization_id` filter)
+- Cross-tenant queries (missing `organisation_id` filter)
 - `any` TypeScript type without explicit justification
 - LLM call inside a synchronous webhook handler
 - Side effects (billing, provisioning) triggered without explicit user consent

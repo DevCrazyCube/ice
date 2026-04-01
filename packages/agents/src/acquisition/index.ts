@@ -4,5 +4,5 @@
 // Runtime implementation is out of scope for the foundation phase.
 
 export type AcquisitionAgentConfig = {
-  organizationId: string;
+  organisationId: string;
 };

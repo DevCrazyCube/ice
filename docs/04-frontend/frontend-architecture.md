@@ -67,17 +67,21 @@ Auth is OIDC-based (Phase 1). Session contains verified `orgId`, `userId`, `role
 - No data fetching logic exists in Foundation phase — placeholder pages only
 
 ```typescript
+// PATTERN ONLY — data fetching not yet implemented (Phase 4+)
 // Server Component pattern
 export default async function Page() {
   const data = await apiFetch("/api/v1/resource"); // calls apps/api
   return <Component data={data} />;
 }
 
-// Client Component pattern (Phase 4+)
+// PATTERN ONLY — not yet implemented (Phase 4+)
+// Client Component pattern
 function useResource() {
   return useSWR<Resource[]>("/api/v1/resource", fetcher);
 }
 ```
+
+> **Status:** No data fetching logic exists in Foundation phase. The patterns above show the intended approach for Phase 4 dashboard features.
 
 ---
 

@@ -17,7 +17,7 @@ Any action that:
 ```sql
 CREATE TABLE audit_logs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id UUID NOT NULL REFERENCES organizations(id),
+  organisation_id UUID NOT NULL REFERENCES organisations(id),
   actor_id        UUID,          -- null for system-initiated actions
   action          TEXT NOT NULL, -- e.g., "conversation.created"
   resource_id     UUID,
@@ -32,7 +32,7 @@ CREATE TABLE audit_logs (
 
 ```typescript
 await auditLog.record({
-  organizationId: orgId,
+  organisationId: orgId,
   actorId: req.userId,
   action: "conversation.created",
   resourceId: conversation.id,

@@ -179,7 +179,7 @@ Controls mapped to OWASP LLM Top 10:
 | LLM02 Insecure output handling | JSON schema validation on all LLM outputs before use; reject/repair invalid outputs |
 | LLM04 Model DoS | Per-tenant token budgets; per-run token caps; queue backpressure |
 | LLM06 Excessive agency | Tool allowlist; default-deny; high-sensitivity tools require explicit consent or approval gate |
-| LLM08 Excessive permissions | Principle of least privilege on tool specs; `requires_approval: true` for sensitive tools |
+| LLM08 Excessive permissions | Principle of least privilege on tool specs; `requireApprovalForHighSensitivityTools: true` in TenantPolicy for sensitive tools (Phase 4 enforcement) |
 
 ---
 

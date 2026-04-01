@@ -2,7 +2,7 @@
 // Not implemented in foundation phase.
 
 export type AgentContext = {
-  organizationId: string;
+  organisationId: string;
   conversationId: string;
   tenantId: string;
 };

@@ -75,7 +75,7 @@ agents {
   type            TEXT NOT NULL CHECK (type IN ('acquisition', 'inbound'))
   name            TEXT NOT NULL
   status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused'))
-  spec            JSONB NOT NULL DEFAULT '{}'    -- AgentSpec v1 (see packages/schemas)
+  spec            JSONB NOT NULL DEFAULT '{}'    -- AgentSpec v1 (see packages/schemas/src/agent-spec.ts for canonical shape)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 }
@@ -92,7 +92,7 @@ channels {
   id              UUID PK  DEFAULT gen_random_uuid()
   organisation_id UUID NOT NULL REFERENCES organisations(id)
   agent_id        UUID NOT NULL REFERENCES agents(id)
-  type            TEXT NOT NULL CHECK (type IN ('sms', 'whatsapp', 'web'))
+  type            TEXT NOT NULL CHECK (type IN ('sms', 'web', 'voice'))
   provider        TEXT NOT NULL        -- e.g. 'twilio'
   config          JSONB NOT NULL DEFAULT '{}'
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -175,6 +175,29 @@ audit_events {
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 }
 ```
+
+---
+
+### TenantPolicy v1 (schema contract defined in Phase 1; operational enforcement expands in Phase 4)
+
+Per-organisation policy constraints applied at the platform level. The Zod contract is defined in `packages/schemas/src/tenant-policy.ts`.
+
+Storage: to be decided at implementation — either as JSONB column on `organisations` or as a separate `tenant_policies` table.
+
+Schema fields:
+- `specVersion` — always `"1"` (literal)
+- `organisationId` — UUID of the organisation this policy applies to
+- `enabledChannels` — array of `"sms"`, `"web"`, `"voice"` (default: `["web"]`)
+- `rateLimits.webhooksPerMinute` — max inbound webhooks per minute (default: 60)
+- `rateLimits.outboundPerMinute` — max outbound messages per minute (default: 30)
+- `contentPolicy.blockedTopics` — topics the agent must refuse to discuss
+- `contentPolicy.allowCompetitorMentions` — whether the agent may discuss competitors (default: false)
+- `contentPolicy.requiredDisclaimer` — optional disclaimer appended to all outbound messages
+- `maxTokensPerConversation` — token budget per conversation (default: 50,000)
+- `requireApprovalForHighSensitivityTools` — whether high-sensitivity tool calls require human approval (default: false; Phase 4 feature, schema placeholder only)
+- `updatedAt` — ISO-8601 datetime (optional)
+
+> **Note:** Approval gating for sensitive tools is defined at the **TenantPolicy level** (not on individual ToolSpec entries). The `requireApprovalForHighSensitivityTools` field is a Phase 4 feature — it is present in the schema contract but not enforced until Phase 4.
 
 ---
 

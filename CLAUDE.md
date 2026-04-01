@@ -13,8 +13,15 @@ Before any implementation work:
 2. Read `docs/07-roadmap/non-goals.md` — know what you are not allowed to build
 3. Identify which phase the requested work belongs to
 4. If the work is in a future phase, refuse and say which phase it belongs to
+5. Read the task-relevant docs for the area being changed (mandatory, not advisory):
+   - Architecture work → `docs/01-architecture/system-overview.md`
+   - Backend / domain work → `docs/03-backend/domain-model.md` and `docs/03-backend/api-contracts.md`
+   - Security / auth / webhooks → `docs/02-security/security-baseline.md`
+   - Frontend / control-plane work → `docs/04-frontend/frontend-architecture.md`
+   - Agent / runtime work → `docs/05-agents/agents-overview.md`
+6. Confirm that task-relevant schemas in `packages/schemas/` match the docs you just read
 
-**If you skip step 1 or 2, you are operating out of contract.**
+**If you skip step 1, 2, or 5, you are operating out of contract.**
 
 ---
 
@@ -146,7 +153,7 @@ Do NOT introduce NestJS, Kafka, Kubernetes, BullMQ, event-sourcing frameworks, o
 
 ## 7. Security Rules (Enforced at All Times)
 
-- **Tenant isolation**: every DB query on business data must filter by `organization_id`. No exceptions. Enforced at the repository layer, not just middleware.
+- **Tenant isolation**: every DB query on business data must filter by `organisation_id`. No exceptions. Enforced at the repository layer, not just middleware.
 - **Webhook security**: all inbound webhooks must verify signatures before processing. Preserve raw request body — do not parse JSON before signature verification (Stripe breaks otherwise).
 - **Secrets**: never in source. `.env` locally, secrets manager in production.
 - **Audit logging**: all security-sensitive actions (login, role change, tool approval, channel binding, billing event) must produce an audit log entry. Audit logs are append-only.
@@ -184,7 +191,7 @@ Security standards: NIST SP 800-53 Rev.5, SP 800-207 (zero trust), SP 800-61 Rev
 - `utils/` folders with miscellaneous helpers
 - `legacy/` or `deprecated/` folders
 - Synchronous LLM calls in webhook handlers
-- Querying business data without `organization_id`
+- Querying business data without `organisation_id`
 - Committing `.env` files or secrets
 - Skipping signature verification on webhooks
 - Processing webhooks before verifying signatures

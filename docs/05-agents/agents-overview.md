@@ -64,20 +64,38 @@ Do not add agent types outside of these two.
 
 ## Agent Configuration Schema
 
-Agents are configured via `AgentSpec v1`. See `packages/schemas/src/agent-spec.ts`.
+Agents are configured via `AgentSpec v1`. See `packages/schemas/src/agent-spec.ts` for the canonical Zod contract.
+
+> **Note:** This is a repo-specific v1 contract inspired by the PDF spec. LLM model selection and temperature are not yet part of the schema — they will be added when agent runtime is implemented in Phase 2.
 
 ```json
 {
-  "agent_id": "uuid",
-  "mode": "inbound | acquisition",
-  "policy_ref": "policy-id",
-  "llm": {
-    "model": "model-name",
-    "max_output_tokens": 1024,
-    "temperature": 0.2
-  }
+  "specVersion": "1",
+  "type": "acquisition",
+  "name": "Sales Agent",
+  "persona": "You are a friendly sales assistant for ...",
+  "goal": "Qualify the lead and book a discovery call",
+  "allowedToolIds": [],
+  "escalationTriggers": [
+    {
+      "condition": "User explicitly requests a human agent",
+      "message": "I'll connect you with a human now. One moment please."
+    }
+  ],
+  "maxTurns": 20
 }
 ```
+
+Fields:
+- `specVersion` — always `"1"` (literal)
+- `type` — `"acquisition"` or `"inbound"`
+- `name` — display name (1–100 chars)
+- `persona` — DEVELOPER-layer prompt content (1–8000 chars); must not contain safety rules
+- `goal` — what the agent aims to achieve per conversation (1–500 chars)
+- `allowedToolIds` — IDs of tools this agent may call (validated against ToolSpec registry at runtime)
+- `escalationTriggers` — conditions that trigger human handoff
+- `maxTurns` — conversation turn limit before suggesting escalation (1–100, default 20)
+- `updatedAt` — ISO-8601 datetime of last update (optional)
 
 ---
 

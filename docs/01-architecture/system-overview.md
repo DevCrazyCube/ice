@@ -20,9 +20,9 @@ Channel webhook
   → Ingest API  (verify signature, fast 200 ACK)
   → Postgres    (persist message event)
   → Outbox/Queue (enqueue job reference)
-  → Worker      (load conversation + policy, call LLM, send reply)
-  → Tool Gateway (schema-validated tool execution — Phase 2+)
-  → Outbound Sender (send reply via channel provider)
+  → Worker      (load conversation + policy — Phase 1; call LLM + send reply — Phase 2+)
+  → Tool Gateway (schema-validated tool execution — Phase 2+ only)
+  → Outbound Sender (send reply via channel provider — Phase 2+)
 ```
 
 **Data plane rule:** never block the webhook ACK on LLM processing. Acknowledge fast, process asynchronously.
@@ -72,7 +72,9 @@ Dashboard (web)
 
 ---
 
-## Webhook Ingest Flow (Sequence)
+## Webhook Ingest Flow — Phase 1 Target (not yet implemented)
+
+> This flow describes the **intended Phase 1 architecture**. It is not yet implemented. The webhook endpoint, outbox table, and worker loop are Phase 1 deliverables still in progress.
 
 ```
 Provider ──► POST /webhooks/inbound (signed)
@@ -94,7 +96,7 @@ Outbox ──► Worker
          Load conversation + policy
               │
               ▼
-         Process (Phase 2: LLM + tools)
+         Process (Phase 2: LLM + tools — not Phase 1)
               │
               ▼
          Persist reply + audit event
@@ -143,7 +145,7 @@ modules/conversations/
   index.ts          Public API of this module (re-exports only)
   routes.ts         HTTP handlers
   service.ts        Business logic (no direct DB calls)
-  repository.ts     SQL queries — always filter by organization_id
+  repository.ts     SQL queries — always filter by organisation_id
   types.ts          Domain-local TypeScript types
 ```
 
@@ -156,7 +158,7 @@ Modules do NOT call each other's repositories. They use each other's service int
 All spans, metrics, and logs use **OpenTelemetry + OTLP** from Phase 1 onward.
 
 Core semantic attributes (stable across all phases):
-- `tenant_id` — organization_id
+- `tenant_id` — organisation_id
 - `conversation_id` — conversation UUID
 - `run_id` — agent run UUID (Phase 2+)
 - `channel_type` — sms | web | voice

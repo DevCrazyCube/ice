@@ -16,6 +16,6 @@ Types and utilities shared between agent implementations.
 ## Rules
 
 - No generic "agent framework" — implement only what these two products need
-- All agent operations must include `organizationId` in context
+- All agent operations must include `organisationId` in context
 - Do not implement agent runtime logic until the corresponding phase is started
 - Read `docs/05-agents/agents-overview.md` and `docs/07-roadmap/current-phase.md` before adding code here

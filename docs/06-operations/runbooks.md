@@ -53,6 +53,8 @@ If this fails:
 
 ## Webhook Testing (Phase 1)
 
+> **Status: Phase 1 target — endpoint not yet implemented.** The `/webhooks/inbound/:channelType` route is a Phase 1 deliverable still in progress. When it is implemented, use the test commands below.
+
 Testing inbound webhook locally:
 
 ```bash
@@ -145,15 +147,13 @@ Semantic attributes on all spans:
 
 ## Database Migrations (Phase 1 — when implemented)
 
+> **Status: Phase 1 target — commands not yet available.** Migration infrastructure will be implemented as part of Phase 1. The commands below document the intended interface.
+
 ```bash
-# Run migrations
-pnpm --filter @ice/api migrate:up
-
-# Rollback last migration
-pnpm --filter @ice/api migrate:down
-
-# Check migration status
-pnpm --filter @ice/api migrate:status
+# NOT YET AVAILABLE — Phase 1 target
+# pnpm --filter @ice/api migrate:up
+# pnpm --filter @ice/api migrate:down
+# pnpm --filter @ice/api migrate:status
 ```
 
 ---

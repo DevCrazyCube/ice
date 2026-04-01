@@ -70,7 +70,10 @@ export async function requireAuth(
   }
 
   try {
-    const { payload } = await jwtVerify(token, sessionKey);
+    const { payload } = await jwtVerify(token, sessionKey, {
+      issuer: "ice-api",
+      audience: "ice-api",
+    });
 
     const orgId = payload.org as string | undefined;
     const userId = payload.sub;

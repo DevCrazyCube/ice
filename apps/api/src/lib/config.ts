@@ -26,7 +26,13 @@ export const config = {
   oidcAuthorizationUrl: optional("OIDC_AUTHORIZATION_URL", ""),
 
   // Session — symmetric key for signing session JWTs (HS256, min 32 chars)
-  sessionSecret: optional("SESSION_SECRET", ""),
+  sessionSecret: (() => {
+    const val = process.env["SESSION_SECRET"] ?? "";
+    if (val && val.length < 32) {
+      throw new Error("SESSION_SECRET must be at least 32 characters");
+    }
+    return val;
+  })(),
 
   // Twilio — required for webhook signature verification
   twilioAuthToken: optional("TWILIO_AUTH_TOKEN", ""),

@@ -13,6 +13,17 @@ interface WindowEntry {
 
 export function createRateLimiter(windowMs: number, maxRequests: number) {
   const windows = new Map<string, WindowEntry>();
+  let checksSinceCleanup = 0;
+
+  /** Remove entries whose window has expired. Runs every ~100 checks. */
+  function maybeCleanup(now: number): void {
+    checksSinceCleanup += 1;
+    if (checksSinceCleanup < 100) return;
+    checksSinceCleanup = 0;
+    for (const [key, entry] of windows) {
+      if (now >= entry.resetAt) windows.delete(key);
+    }
+  }
 
   return {
     /**
@@ -21,6 +32,7 @@ export function createRateLimiter(windowMs: number, maxRequests: number) {
      */
     check(key: string): { allowed: boolean; retryAfterMs: number } {
       const now = Date.now();
+      maybeCleanup(now);
       const entry = windows.get(key);
 
       // No entry or window expired — start a new window

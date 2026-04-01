@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, createHmac } from "node:crypto";
 import express, { type Router } from "express";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import { getDb, recordAuditEvent } from "@ice/core";
@@ -29,9 +29,9 @@ function base64url(buf: Buffer): string {
  * Format: payload.signature — prevents tampering of the auth state cookie.
  */
 function signCookieValue(value: string): string {
-  if (!sessionKey) throw new Error("SESSION_SECRET not configured");
-  const sig = createHash("sha256")
-    .update(value + config.sessionSecret)
+  if (!config.sessionSecret) throw new Error("SESSION_SECRET not configured");
+  const sig = createHmac("sha256", config.sessionSecret)
+    .update(value)
     .digest("base64url");
   return `${value}.${sig}`;
 }
@@ -155,7 +155,12 @@ authRouter.get("/auth/callback", async (req, res) => {
   }
 
   // Clear the auth-state cookie
-  res.clearCookie("ice-auth-state", { path: "/auth/callback" });
+  res.clearCookie("ice-auth-state", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/auth/callback",
+  });
 
   // Exchange code for tokens at OIDC provider
   let tokenData: { id_token?: string; access_token?: string };
@@ -250,6 +255,8 @@ authRouter.get("/auth/callback", async (req, res) => {
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
+    .setIssuer("ice-api")
+    .setAudience("ice-api")
     .setIssuedAt()
     .setExpirationTime(`${SESSION_MAX_AGE_S}s`)
     .sign(sessionKey);
@@ -287,6 +294,11 @@ authRouter.post("/auth/logout", requireAuth, async (req, res) => {
     ipAddress: req.ip ?? null,
   }).catch((err) => logger.error({ err }, "Failed to record user.logout audit event"));
 
-  res.clearCookie("ice-session", { path: "/" });
+  res.clearCookie("ice-session", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+  });
   res.status(200).json({ success: true });
 });

@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node --import ./dist/lib/telemetry.js dist/main.js",
     "typecheck": "tsc --noEmit",
-    "migrate": "tsx src/lib/migrate.ts"
+    "migrate": "tsx src/lib/migrate.ts",
+    "seed": "tsx scripts/run-seed.ts",
+    "generate-token": "tsx scripts/generate-token.ts"
   },
   "dependencies": {
     "@ice/core": "workspace:*",

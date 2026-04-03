@@ -14,6 +14,7 @@ Before any implementation work:
 3. Identify which phase the requested work belongs to
 4. If the work is in a future phase, refuse and say which phase it belongs to
 5. Read the task-relevant docs for the area being changed (mandatory, not advisory):
+   - Product direction → `docs/00-product/product-scope.md` and `docs/00-product/adaptive-business-context.md`
    - Architecture work → `docs/01-architecture/system-overview.md`
    - Backend / domain work → `docs/03-backend/domain-model.md` and `docs/03-backend/api-contracts.md`
    - Security / auth / webhooks → `docs/02-security/security-baseline.md`
@@ -27,12 +28,19 @@ Before any implementation work:
 
 ## 1. What ICE Is
 
-ICE is a **multi-tenant agent platform** for businesses that need to automate conversations.
+ICE is a **multi-tenant adaptive conversational engine** for businesses that need to automate inbound conversations.
 
-It has exactly **two products**:
+It is a **single shared engine** with exactly **two operating modes**:
 
-1. **Acquisition Agent** — qualifies new leads, educates on the product, makes a timed offer, triggers checkout/provisioning with explicit user consent.
-2. **Client Inbound Agent** — handles inbound conversations for client businesses using configured knowledge and policy; answers, qualifies, routes, or escalates safely.
+1. **Acquisition Mode** — qualifies new leads, educates on the product, makes a timed offer, triggers checkout/provisioning with explicit user consent.
+2. **Client Inbound Mode** — handles inbound conversations for client businesses; answers, qualifies, routes, or escalates safely.
+
+**Business-specific behavior comes from business context (structured data about each business), not from niche-specific templates or per-industry prompt libraries.** There is no "dentist bot" or "realtor bot." One engine adapts to any business through context.
+
+**Three-layer agent architecture:**
+1. **Core behavior** (SYSTEM) — safety, validation, conversation flow. Shared across all agents. Not business-configurable.
+2. **Business context** (DEVELOPER) — business profile, services, FAQ, tone, policies. Per-tenant. Entered by org admin.
+3. **Channel/runtime rules** — formatting, rate limits, provider constraints. Per-channel.
 
 **Single-agent runs only.** One conversation is handled by one agent. No swarms, no multi-agent coordination.
 
@@ -41,12 +49,15 @@ It has exactly **two products**:
 ## 2. What ICE Is NOT
 
 - Not a generic agent framework
+- Not a niche-specific bot library (no "dentist bot," "realtor bot," "plumber bot" templates)
+- Not a prompt zoo or template marketplace
 - Not a workflow / orchestration builder
 - Not a canvas or drag-and-drop UI
 - Not a CRM replacement
 - Not a multi-agent playground
 - Not an AI sandbox or experimentation platform
 - Not a streaming pipeline system
+- Not an autonomous web scraper (all ingested content requires human review)
 
 If a request would add any of the above, stop and ask before proceeding.
 
@@ -59,9 +70,9 @@ Do not invent phases. Do not rename phases. The delivery plan has exactly four p
 | # | Name | Core Deliverables |
 |---|------|-------------------|
 | 1 | **Foundations** | Tenancy + auth + audit + webhook ingest + outbox/queue + worker skeleton + OTel |
-| 2 | **Agent capabilities** | Runtime loop + tool gateway + pgvector/RAG + guardrails + eval harness |
+| 2 | **Agent capabilities** | Runtime loop + tool gateway + **structured business context** + guardrails + eval harness |
 | 3 | **Revenue-ready acquisition** | Conversation state machine + Stripe + Twilio + idempotent provisioning |
-| 4 | **Scaling / Agent OS** | Dashboard v1 + policy-as-config + quotas + approvals + SLOs |
+| 4 | **Scaling / Agent OS** | Dashboard v1 + policy-as-config + quotas + approvals + SLOs + context retrieval (pgvector) |
 
 **Current active phase: read `docs/07-roadmap/current-phase.md`.**
 
@@ -91,7 +102,7 @@ Never mix control plane and data plane logic in the same module. Webhook ingest 
 
 Inbound channel messages are **always processed asynchronously**:
 1. Webhook arrives → verify signature → fast ACK (`200 OK`) → persist to Postgres → enqueue job ref
-2. Worker picks up job → loads conversation + policy → processes → sends outbound reply
+2. Worker picks up job → loads conversation + business context + policy → processes → sends outbound reply
 
 Never make an LLM call synchronously in a webhook handler. This is a cost, reliability, and DoS-protection requirement.
 
@@ -161,6 +172,7 @@ Do NOT introduce NestJS, Kafka, Kubernetes, BullMQ, event-sourcing frameworks, o
 - **OIDC/JWT**: validate issuer, audience, and signature. Rotate via JWKS. Follow RFC 9700 (OAuth security BCP).
 - **Prompt injection**: never interpolate raw user input or retrieved text directly into agent instructions without structural separation.
 - **Output validation**: all LLM outputs must be schema-validated before use. Reject or repair invalid outputs.
+- **Business context as untrusted input**: all business context — whether manually entered, scraped from websites, or imported from documents — must be validated, sanitised, and structurally separated from system-level safety rules. Ingested content (Phase 3+) requires human review before activation. See `docs/02-security/security-baseline.md §8a`.
 
 Security standards: NIST SP 800-53 Rev.5, SP 800-207 (zero trust), SP 800-61 Rev.3 (incident response), SP 800-218 (SSDF), OWASP API Top 10 (2023), OWASP LLM Top 10.
 
@@ -184,6 +196,10 @@ Security standards: NIST SP 800-53 Rev.5, SP 800-207 (zero trust), SP 800-61 Rev
 ## 9. Anti-Patterns (Blocked)
 
 - Generic "agents engine" or "agent framework"
+- **Per-industry prompt templates** ("dentist template," "legal template," "retail template")
+- **Niche-specific role libraries** or prompt zoos
+- **Hardcoded business knowledge in source code** (all business knowledge belongs in `business_context` data)
+- **Niche-specific UI components** (e.g., "dental practice setup wizard")
 - Workflow / orchestration engine
 - Canvas or drag-and-drop builder
 - Multiple queue implementations
@@ -196,6 +212,8 @@ Security standards: NIST SP 800-53 Rev.5, SP 800-207 (zero trust), SP 800-61 Rev
 - Skipping signature verification on webhooks
 - Processing webhooks before verifying signatures
 - Making irreversible side effects (billing, provisioning) without explicit user consent
+- **Treating scraped/ingested content as trusted input** (always validate, sanitise, require human review)
+- **Building full RAG/scraping systems before manual context is validated** (Phase 2 = manual structured context only)
 
 ---
 

@@ -2,35 +2,85 @@
 
 ## What ICE Is
 
-ICE is a **multi-tenant agent platform** for businesses that need to automate conversations at scale.
+ICE is a **multi-tenant adaptive conversational engine** for businesses that need to automate inbound conversations.
 
-ICE has exactly two products:
+ICE is **not** a library of niche-specific bots (dentist bot, realtor bot, plumber bot). It is a single shared engine that learns how to behave for each business from **business context** — structured information about the business, its products, policies, and tone.
 
-### 1. Acquisition Agent
+---
+
+## Product Model: One Engine, Two Modes
+
+ICE has exactly **two operating modes**, both powered by the same underlying conversational engine:
+
+### 1. Acquisition Mode
+
 Handles new lead conversations on behalf of a business.
 
 Responsibilities:
 - Qualifies lead interest
-- Answers basic product questions using configured knowledge
+- Answers basic product questions using business context
 - Moves leads toward a defined next step (booking, signup, handoff to human)
 
 Does NOT do deep CRM operations or complex routing.
 
-### 2. Client Inbound Agent
+### 2. Client Inbound Mode
+
 Handles inbound conversations for existing client businesses.
 
 Responsibilities:
-- Answers questions using business-specific knowledge and policy
+- Answers questions grounded in the business's context and policy
 - Qualifies or routes conversations to the right resource
 - Escalates safely when confidence is low or policy requires human review
 
 Does NOT replace human agents for complex or sensitive situations.
 
+### Why "Modes" Not "Products"
+
+Both modes share:
+- The same runtime engine (`packages/agents/`)
+- The same prompt architecture (three-layer: core → business context → channel rules)
+- The same tool gateway and guardrails
+- The same security and tenant isolation model
+
+The difference is the **goal and conversation flow**, not the underlying technology. An agent's `type` field (`acquisition` | `inbound`) selects the mode. Business-specific behavior comes from the business context attached to the agent, not from a different codebase or template.
+
+---
+
+## Adaptive Business Context (Core Product Direction)
+
+ICE agents adapt to each business through **business context** — not through hardcoded niche templates or per-industry prompt libraries.
+
+### What Business Context Is
+
+Structured information that tells the engine how to behave for a specific business:
+- **Business profile** — name, industry, services, operating hours, location
+- **Product/service catalog** — what the business offers, pricing tiers, key features
+- **Tone and style** — formal vs casual, brand voice guidelines
+- **Policy rules** — what the agent can and cannot say, escalation triggers, disclaimers
+- **FAQ / knowledge** — common questions and approved answers
+
+### How Context Evolves Across Phases
+
+| Phase | Context Source | Method |
+|-------|---------------|--------|
+| Phase 2 | Manual structured input | Org admin enters business profile, FAQ, policies via dashboard forms |
+| Phase 3+ | Semi-automated ingestion | Import from website, documents, social profiles (with human review) |
+| Phase 4+ | Retrieval over context | pgvector search over ingested and structured context at runtime |
+
+### What Business Context Is NOT
+
+- Not a "prompt zoo" — there is no library of per-niche system prompts
+- Not a template marketplace — businesses don't pick from "dentist template" or "realtor template"
+- Not autonomous scraping — even future ingestion requires validation and human review
+- Not a replacement for policy — business context informs tone and knowledge; policy rules remain explicit configuration
+
+See `docs/00-product/adaptive-business-context.md` for the detailed design direction.
+
 ---
 
 ## Multi-Tenancy Model
 
-Each client business is an **Organisation**. All data, agents, conversations, and configurations are scoped to an `organisation_id`. No cross-tenant data access is permitted at any layer.
+Each client business is an **Organisation**. All data, agents, conversations, business context, and configurations are scoped to an `organisation_id`. No cross-tenant data access is permitted at any layer.
 
 ---
 
@@ -41,9 +91,9 @@ ICE is built in four phases:
 | # | Phase | What ships |
 |---|-------|-----------|
 | 1 | Foundations | Tenancy, auth, audit, webhook ingest, outbox/queue, worker skeleton, OTel |
-| 2 | Agent Capabilities | Agent runtime, tool gateway, pgvector/RAG, guardrails, eval harness |
+| 2 | Agent Capabilities | Runtime loop, tool gateway, **structured business context**, guardrails, eval harness |
 | 3 | Revenue-Ready Acquisition | Conversation state machine, Stripe, Twilio, idempotent provisioning |
-| 4 | Scaling / Agent OS | Dashboard v1, policy-as-config, quotas, approvals, SLOs |
+| 4 | Scaling / Agent OS | Dashboard v1, policy-as-config, quotas, approvals, SLOs, context ingestion automation |
 
 ---
 
@@ -51,12 +101,14 @@ ICE is built in four phases:
 
 | Claim | Reality |
 |-------|---------|
-| Generic agent framework | No. ICE has two specific products only. |
+| Generic agent framework | No. ICE is one adaptive engine with two modes. |
+| Niche-specific bot library | No. No "dentist bot" or "realtor bot" templates. |
 | Workflow builder | No. No canvas, no drag-and-drop. |
 | CRM replacement | No. Conversations only. |
 | Swarm / multi-agent system | No. Each conversation is handled by one agent. |
 | AI sandbox or playground | No. Production-oriented only. |
 | General-purpose LLM proxy | No. |
+| Prompt zoo / template marketplace | No. Behavior comes from business context, not pre-built templates. |
 
 ---
 
@@ -69,11 +121,14 @@ ICE is built in four phases:
 - No multi-agent coordination primitives
 - No real-time streaming dashboard (beyond basic status)
 - No LLM calls inside webhook route handlers (ever)
+- No niche-specific hardcoded role library
+- No per-industry prompt templates
+- No autonomous web scraping without human review
 
 ---
 
 ## Intended Users
 
 - **Platform admins** — ICE employees managing client onboarding and infrastructure
-- **Org admins** — client business owners configuring their agent's knowledge and policy
+- **Org admins** — client business owners configuring their agent's business context and policy
 - **End users** — interact with the agent via a configured channel (web chat, SMS)

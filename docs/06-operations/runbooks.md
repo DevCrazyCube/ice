@@ -53,7 +53,7 @@ If this fails:
 
 ## Webhook Testing (Phase 1)
 
-> **Status: Phase 1 target — endpoint not yet implemented.** The `/webhooks/inbound/:channelType` route is a Phase 1 deliverable still in progress. When it is implemented, use the test commands below.
+> **Status: Phase 1 implemented.** The `/webhooks/inbound/:channelId` route is implemented. The worker loads conversation context and (in Phase 2+) business context to process each message. Use the test commands below.
 
 Testing inbound webhook locally:
 
@@ -145,16 +145,31 @@ Semantic attributes on all spans:
 
 ---
 
-## Database Migrations (Phase 1 — when implemented)
+## Database Migrations (Phase 1)
 
-> **Status: Phase 1 target — commands not yet available.** Migration infrastructure will be implemented as part of Phase 1. The commands below document the intended interface.
+> **Status: Implemented.** Migration runner is available.
 
 ```bash
-# NOT YET AVAILABLE — Phase 1 target
-# pnpm --filter @ice/api migrate:up
-# pnpm --filter @ice/api migrate:down
-# pnpm --filter @ice/api migrate:status
+pnpm --filter @ice/api migrate
 ```
+
+## Seed Data (Phase 1)
+
+> **Status: Implemented.** Inserts idempotent seed data for local development.
+
+```bash
+pnpm --filter @ice/api seed
+```
+
+## Generate Dev Token (Phase 1)
+
+> **Status: Implemented.** Creates an 8-hour session JWT for the seed user.
+
+```bash
+TOKEN=$(pnpm --filter @ice/api generate-token 2>/dev/null)
+```
+
+See `docs/07-roadmap/phase1-validation.md` for the full validation runbook.
 
 ---
 

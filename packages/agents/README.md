@@ -2,20 +2,29 @@
 
 Agent runtime package for the ICE platform.
 
-## Products
+## Architecture: Shared Engine + Business Context
 
-### Acquisition Agent (`src/acquisition/`)
-Handles new lead conversations. Qualifies interest, answers basic product questions, moves leads toward a next step.
+This package implements a **single shared conversational engine** that adapts to each business through business context. There are no per-industry templates, niche-specific prompt files, or hardcoded role definitions.
 
-### Client Inbound Agent (`src/inbound/`)
-Handles inbound conversations for client businesses. Uses business knowledge and policy to answer, qualify, route, or escalate.
+### Two Operating Modes
+
+- **Acquisition** (`src/acquisition/`) — qualifies leads, educates, makes offers, triggers checkout with consent
+- **Inbound** (`src/inbound/`) — answers questions, qualifies, routes, escalates using business context
+
+Both modes share the same three-layer prompt architecture:
+
+1. **Core behavior** (SYSTEM) — safety, validation, conversation flow. Shared across all agents.
+2. **Business context** (DEVELOPER) — business profile, services, FAQ, tone. Per-tenant, from `business_context` table.
+3. **Channel rules** — formatting, length limits, provider constraints. Per-channel.
 
 ### Shared (`src/shared/`)
-Types and utilities shared between agent implementations.
+Types and utilities shared between operating modes.
 
 ## Rules
 
-- No generic "agent framework" — implement only what these two products need
-- All agent operations must include `organisationId` in context
+- **No niche-specific templates.** Business-specific behavior comes from business context data, not from per-industry code.
+- **No prompt zoo.** One prompt architecture, parameterised by business context.
+- All agent operations must include `organisationId` in context (tenant isolation)
 - Do not implement agent runtime logic until the corresponding phase is started
 - Read `docs/05-agents/agents-overview.md` and `docs/07-roadmap/current-phase.md` before adding code here
+- Read `docs/00-product/adaptive-business-context.md` for the product direction

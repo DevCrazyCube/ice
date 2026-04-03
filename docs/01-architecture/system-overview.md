@@ -2,9 +2,11 @@
 
 ## Core Architectural Pattern
 
-ICE uses **event-driven ingestion with asynchronous processing** as its primary architectural pattern.
+ICE is a **shared adaptive conversational engine** that uses **event-driven ingestion with asynchronous processing** as its primary architectural pattern.
 
-This is both a cost-control and security decision. OWASP API Security Top 10 (2023) explicitly identifies "Unrestricted Resource Consumption" — including costs paid per API request (SMS, LLM tokens) — as a top API risk. Asynchronous pipelines enforce budgets, retries, and backpressure.
+The engine is shared across all tenants and agent types. Business-specific behavior is driven by **business context** (structured data about each business) — not by niche-specific templates or hardcoded per-industry roles. See `docs/00-product/adaptive-business-context.md` for the product direction.
+
+The async-first design is both a cost-control and security decision. OWASP API Security Top 10 (2023) explicitly identifies "Unrestricted Resource Consumption" — including costs paid per API request (SMS, LLM tokens) — as a top API risk. Asynchronous pipelines enforce budgets, retries, and backpressure.
 
 ---
 
@@ -20,10 +22,12 @@ Channel webhook
   → Ingest API  (verify signature, fast 200 ACK)
   → Postgres    (persist message event)
   → Outbox/Queue (enqueue job reference)
-  → Worker      (load conversation + policy — Phase 1; call LLM + send reply — Phase 2+)
+  → Worker      (load conversation + business context + policy — Phase 1; call LLM + send reply — Phase 2+)
   → Tool Gateway (schema-validated tool execution — Phase 2+ only)
   → Outbound Sender (send reply via channel provider — Phase 2+)
 ```
+
+The worker loads business context (Layer 2) and channel rules (Layer 3) alongside the shared core behavior (Layer 1) to produce responses that are specific to each business without requiring niche-specific code paths.
 
 **Data plane rule:** never block the webhook ACK on LLM processing. Acknowledge fast, process asynchronously.
 
@@ -37,7 +41,7 @@ Dashboard (web)
   → Audit log (Postgres, append-only)
 ```
 
-**Control plane rule:** no message processing logic here. CRUD for agents, channels, policies, and knowledge.
+**Control plane rule:** no message processing logic here. CRUD for agents, channels, business context, policies, and knowledge.
 
 ---
 
@@ -48,7 +52,7 @@ Dashboard (web)
 │  CONTROL PLANE                                            │
 │  apps/web (Dashboard) ──► apps/api (Admin API)           │
 │                              │           │               │
-│                           Config      Audit log          │
+│                      Config/Context   Audit log          │
 └──────────────────────────────┼───────────────────────────┘
                                │
 ┌──────────────────────────────▼───────────────────────────┐
@@ -171,8 +175,10 @@ Trace IDs propagate from ingest → worker → outbound.
 
 | Decision | Choice | Reason |
 |----------|--------|--------|
+| Shared engine, not niche templates | One runtime, business context drives behavior | Scales to any industry without per-niche code |
 | Async webhook processing | Outbox → worker | Cost control, retries, DoS protection |
 | Single datastore | Postgres + pgvector | Minimal ops, simple tenancy, vectors included |
 | Redis | Optional | Only for rate-limit + idempotency; not required in Phase 1 |
 | Auth | OIDC + JWT (Phase 1) | Standard; RFC 9700 security BCP |
 | Microservices | No | Modular monolith first; decompose only if proven need |
+| Business context before RAG | Manual structured context first (Phase 2) | Validates architecture; avoids premature complexity |

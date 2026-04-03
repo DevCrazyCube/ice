@@ -13,12 +13,13 @@ No large UI component library. No shadcn, no MUI, no Chakra.
 
 ## Role: Control Plane UI
 
-`apps/web` is the **control plane UI** — it serves organisation admins and platform admins who configure agents, channels, knowledge, and policy.
+`apps/web` is the **control plane UI** — it serves organisation admins and platform admins who configure agents, channels, business context, and policy.
 
 It does NOT:
 - Process messages (data plane work)
 - Make LLM calls
 - Contain business logic
+- Offer niche-specific templates or per-industry setup wizards
 
 The data plane (webhook ingest, outbox, workers, outbound send) lives entirely in `apps/api`.
 
@@ -34,7 +35,7 @@ apps/web/src/
     dashboard/            Protected control-plane area (Phase 4)
       layout.tsx          Sidebar + header shell
       page.tsx            Dashboard home
-      agents/             Agent configuration
+      agents/             Agent configuration + business context (Phase 2+)
       channels/           Channel management
       conversations/      Conversation history (read-only)
       settings/           Org settings, billing
@@ -102,3 +103,4 @@ function useResource() {
 4. **TypeScript strict mode.** All components fully typed, no `any`.
 5. **No raw message content rendered without sanitisation.**
 6. **Auth context always from server-side session** — never from URL params or client state.
+7. **No niche-template selectors.** Agent setup flows must use generic business context forms (business profile, services, FAQ, tone), not per-industry templates ("dental practice," "law firm," etc.). The same forms work for every business type.

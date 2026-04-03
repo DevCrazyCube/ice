@@ -183,6 +183,37 @@ Controls mapped to OWASP LLM Top 10:
 
 ---
 
+## 8a. Business Context Ingestion Security (Phase 2+)
+
+ICE agents derive business-specific behavior from **business context** — structured data about the business (profile, services, FAQ, tone, policies). In later phases, this context may be ingested from external sources (websites, documents, social profiles). All ingested content is **untrusted input** regardless of source.
+
+### Trust Boundaries
+
+| Context Source | Trust Level | Required Controls |
+|---------------|-------------|-------------------|
+| Org admin manual entry (dashboard forms) | Semi-trusted | Zod validation, length limits, sanitisation |
+| Website scrape (Phase 3+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
+| Document upload (Phase 3+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
+| Social profile import (Phase 4+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
+
+### Security Requirements for All Business Context
+
+1. **Structural separation from system instructions.** Business context is injected into the DEVELOPER layer of the prompt, never into the SYSTEM layer. Safety rules and core behavior remain in SYSTEM, isolated from context that could contain adversarial content.
+
+2. **Validation and sanitisation.** All business context — whether entered manually or ingested — must pass through Zod schema validation. Content must be bounded (max lengths), stripped of executable content (scripts, HTML), and checked for obvious injection patterns.
+
+3. **Size limits.** Per-tenant limits on total context volume. Prevents resource exhaustion and prompt stuffing.
+
+4. **Human review gate for automated ingestion.** Content ingested from websites, documents, or social profiles must be staged for org admin review before it becomes active context. No scraped content enters the live prompt without explicit approval.
+
+5. **Audit trail.** All business context changes (create, update, delete, approve) must produce audit events. Source of ingestion recorded.
+
+6. **No executable content.** Business context is treated as data, never as instructions. The engine reads context to understand what the business does — it does not execute arbitrary instructions found in context.
+
+7. **Tenant isolation.** Business context is scoped to `organisation_id`. No cross-tenant context access. Context retrieval (pgvector, Phase 4+) must enforce tenant boundaries in every query.
+
+---
+
 ## 9. Secret Management
 
 - Development: `.env` file (never committed)

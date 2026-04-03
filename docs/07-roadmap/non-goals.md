@@ -13,7 +13,10 @@ If a request would require implementing any of the following, Claude must:
 
 These will never be part of ICE:
 
-- **Generic agent framework** — ICE has two specific agent products. No abstractions that generalise beyond them.
+- **Generic agent framework** — ICE is one shared engine with two operating modes. No abstractions that generalise beyond them.
+- **Niche-specific hardcoded role library** — No "dentist bot," "realtor bot," "plumber bot" templates. Business-specific behavior comes from business context, not from per-industry prompt templates or role definitions.
+- **Prompt zoo / template marketplace** — No library of per-niche system prompts. One prompt architecture (three layers), parameterised by business context.
+- **Per-industry skill libraries** — Skills are generic (answer from context, qualify, escalate). Business context makes them specific, not niche-specific skill code.
 - **Workflow / orchestration builder** — No canvas, no drag-and-drop, no flow definition language.
 - **Visual flow editor** — No node-based UI.
 - **CRM replacement** — ICE does not store or manage customer records beyond conversation scope.
@@ -24,6 +27,7 @@ These will never be part of ICE:
 - **Multiple config loaders** — One config system per app.
 - **Legacy compatibility layers** — Replace old code, do not maintain both paths.
 - **Synchronous LLM calls in webhook handlers** — Always async; always outbox pattern.
+- **Autonomous scraping without human review** — All ingested business context (website, documents, social) must be reviewed and approved by the org admin before entering the live prompt.
 
 ---
 
@@ -65,3 +69,7 @@ These will never be part of ICE:
 - LLM call inside a synchronous webhook handler
 - Side effects (billing, provisioning) triggered without explicit user consent
 - Processing a webhook payload before verifying its signature
+- Per-industry agent templates or niche-specific prompt files
+- Hardcoded business knowledge in source code (all business knowledge belongs in `business_context` table)
+- Niche-specific UI components (e.g., "dental practice setup wizard")
+- Treating ingested/scraped content as trusted input

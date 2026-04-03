@@ -66,7 +66,7 @@ Planned roles:
 
 ### Agent
 
-A configured agent instance belonging to an organisation.
+A configured agent instance belonging to an organisation. All agents share the same underlying conversational engine — the `type` field selects the operating mode (acquisition or inbound), while business-specific behavior comes from business context (see below), not from niche-specific code.
 
 ```
 agents {
@@ -221,13 +221,45 @@ organisations ||--o{ audit_events  : logs
 
 When Phase 2 begins, add:
 
+### Business Context (Phase 2 — Structured Manual Entry)
+
+Business context drives the adaptive behavior of the shared engine. In Phase 2, context is entered manually by the org admin via dashboard forms.
+
+```
+business_context {
+  id              UUID PK  DEFAULT gen_random_uuid()
+  organisation_id UUID NOT NULL REFERENCES organisations(id)
+  agent_id        UUID NOT NULL REFERENCES agents(id)
+  category        TEXT NOT NULL CHECK (category IN ('profile', 'services', 'faq', 'tone', 'knowledge'))
+  title           TEXT NOT NULL          -- e.g. "Business Hours", "Return Policy"
+  content         TEXT NOT NULL           -- structured text, validated and sanitised
+  sort_order      INT NOT NULL DEFAULT 0
+  active          BOOLEAN NOT NULL DEFAULT true
+  source          TEXT NOT NULL DEFAULT 'manual'  -- 'manual' | 'website' | 'document' | 'social' (Phase 3+)
+  reviewed_at     TIMESTAMPTZ            -- NULL for manual; required for ingested content (Phase 3+)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+}
+```
+
+**Key design decisions:**
+- `organisation_id` filter on every query (tenant isolation)
+- `source` field tracks provenance — `manual` for Phase 2; future ingestion sources added in Phase 3+
+- `reviewed_at` is NULL for manual entries (implicitly reviewed by the person entering them); required non-NULL for auto-ingested content before it becomes `active`
+- `active` flag allows staging content before it enters the live prompt
+- Content is validated/sanitised at write time — business context is semi-trusted input (see `docs/02-security/security-baseline.md §8a`)
+
+> **Note:** Do not build ingestion pipelines (website scraper, document processor) in Phase 2. Phase 2 is manual structured context only. The schema supports future sources but the ingestion code is Phase 3+.
+
+### Other Phase 2 Entities
+
 ```
 agent_runs       — one per conversation turn
 tool_calls       — invocations within a run
 run_events       — lifecycle events for a run
-knowledge_docs   — uploaded documents per org
-knowledge_chunks — chunked document segments
-embeddings       — vector embeddings for chunks
+knowledge_docs   — uploaded documents per org (Phase 3+, not Phase 2)
+knowledge_chunks — chunked document segments (Phase 3+)
+embeddings       — vector embeddings for chunks (Phase 4+)
 ```
 
 ---

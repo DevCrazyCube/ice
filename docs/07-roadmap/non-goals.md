@@ -28,6 +28,9 @@ These will never be part of ICE:
 - **Legacy compatibility layers** — Replace old code, do not maintain both paths.
 - **Synchronous LLM calls in webhook handlers** — Always async; always outbox pattern.
 - **Autonomous scraping without human review** — All ingested business context (website, documents, social) must be reviewed and approved by the org admin before entering the live prompt.
+- **Embedded operator mode** — ICE does not act inside third-party software (CRMs, helpdesks, dialers). It is an agent platform that handles conversations, not middleware that operates external business tools.
+- **Adapter capability marketplace** — No architecture for discovering or executing actions inside third-party business software. ICE responds to conversations — it does not drive external software on behalf of businesses.
+- **CRM / helpdesk / dialer integration as product direction** — ICE is not "AI inside your sales stack." Integration with external tools may happen as simple webhook/API connections at the edges, never as a core architectural concern.
 
 ---
 

@@ -1,8 +1,8 @@
 # ICE — Inbound Conversation Engine
 
-ICE is a **multi-tenant adaptive conversational engine** that automates inbound conversations for businesses.
+ICE is a **multi-tenant environment-aware agent platform** that automates inbound conversations for businesses.
 
-One shared engine. Business-specific behavior driven by **business context** — not niche templates.
+One shared engine. Environment-aware agents that learn a business from its context and respond like they belong there. No niche templates.
 
 **Two operating modes:**
 
@@ -22,7 +22,7 @@ packages/
   core/         Shared db, queue, telemetry, security primitives
   schemas/      Shared Zod schemas and TypeScript types
   config/       Shared configuration helpers
-  agents/       Agent runtime (shared engine, two modes)
+  agents/       Agent runtime (environment-aware, two modes)
 
 docs/           Architecture, security, and roadmap docs
 .claude/        Claude operating rules, skills, and commands
@@ -71,7 +71,7 @@ See `docs/` for architecture, security, and roadmap documentation.
 
 Key docs:
 - `docs/00-product/product-scope.md` — what ICE is and isn't
-- `docs/00-product/adaptive-business-context.md` — how business context drives agent behavior
+- `docs/00-product/adaptive-business-context.md` — environment-aware agents and business context
 - `docs/05-agents/agents-overview.md` — three-layer agent architecture
 
 ## Claude Operating Rules

@@ -2,15 +2,15 @@
 
 ## What ICE Is
 
-ICE is a **multi-tenant adaptive conversational engine** for businesses that need to automate inbound conversations.
+ICE is a **multi-tenant environment-aware agent platform** for businesses that need to automate inbound conversations.
 
-ICE is **not** a library of niche-specific bots (dentist bot, realtor bot, plumber bot). It is a single shared engine that learns how to behave for each business from **business context** — structured information about the business, its products, policies, and tone.
+ICE agents are **environment-aware**: they learn a business from its context and respond as if they belong in that business's environment. ICE is **not** a library of niche-specific bots (dentist bot, realtor bot, plumber bot). It is a single shared engine that adapts to any business through **business context** — structured information about the business, its products, policies, and tone.
 
 ---
 
 ## Product Model: One Engine, Two Modes
 
-ICE has exactly **two operating modes**, both powered by the same underlying conversational engine:
+ICE has exactly **two operating modes**, both powered by the same underlying shared engine:
 
 ### 1. Acquisition Mode
 
@@ -46,9 +46,9 @@ The difference is the **goal and conversation flow**, not the underlying technol
 
 ---
 
-## Adaptive Business Context (Core Product Direction)
+## Environment-Aware Agents (Core Product Direction)
 
-ICE agents adapt to each business through **business context** — not through hardcoded niche templates or per-industry prompt libraries.
+ICE agents are environment-aware — they adapt to each business through **business context** (the business's environment), not through hardcoded niche templates or per-industry prompt libraries.
 
 ### What Business Context Is
 
@@ -101,7 +101,7 @@ ICE is built in four phases:
 
 | Claim | Reality |
 |-------|---------|
-| Generic agent framework | No. ICE is one adaptive engine with two modes. |
+| Generic agent framework | No. ICE is one environment-aware engine with two modes. |
 | Niche-specific bot library | No. No "dentist bot" or "realtor bot" templates. |
 | Workflow builder | No. No canvas, no drag-and-drop. |
 | CRM replacement | No. Conversations only. |
@@ -109,6 +109,8 @@ ICE is built in four phases:
 | AI sandbox or playground | No. Production-oriented only. |
 | General-purpose LLM proxy | No. |
 | Prompt zoo / template marketplace | No. Behavior comes from business context, not pre-built templates. |
+| Embedded operator / CRM integration | No. ICE is an agent platform, not middleware inside third-party software. |
+| Adapter marketplace | No. ICE does not discover or execute actions inside external business software. |
 
 ---
 
@@ -124,6 +126,8 @@ ICE is built in four phases:
 - No niche-specific hardcoded role library
 - No per-industry prompt templates
 - No autonomous web scraping without human review
+- No embedded operator mode or CRM/helpdesk/dialer integration as product direction
+- No adapter capability marketplace for third-party software
 
 ---
 

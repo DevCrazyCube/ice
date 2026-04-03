@@ -66,7 +66,7 @@ Planned roles:
 
 ### Agent
 
-A configured agent instance belonging to an organisation. All agents share the same underlying conversational engine — the `type` field selects the operating mode (acquisition or inbound), while business-specific behavior comes from business context (see below), not from niche-specific code.
+A configured agent instance belonging to an organisation. All agents share the same underlying engine — the `type` field selects the operating mode (acquisition or inbound), while business-specific behavior comes from business context (see below), not from niche-specific code.
 
 ```
 agents {

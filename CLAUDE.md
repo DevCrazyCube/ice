@@ -28,18 +28,20 @@ Before any implementation work:
 
 ## 1. What ICE Is
 
-ICE is a **multi-tenant adaptive conversational engine** for businesses that need to automate inbound conversations.
+ICE is a **multi-tenant environment-aware agent platform** for businesses that need to automate inbound conversations.
 
-It is a **single shared engine** with exactly **two operating modes**:
+ICE agents are **environment-aware**: they learn a business from its context and respond as if they belong in that business's environment. There is no "dentist bot" or "realtor bot." One shared engine adapts to any business through structured business context.
+
+ICE has exactly **two operating modes**:
 
 1. **Acquisition Mode** — qualifies new leads, educates on the product, makes a timed offer, triggers checkout/provisioning with explicit user consent.
 2. **Client Inbound Mode** — handles inbound conversations for client businesses; answers, qualifies, routes, or escalates safely.
 
-**Business-specific behavior comes from business context (structured data about each business), not from niche-specific templates or per-industry prompt libraries.** There is no "dentist bot" or "realtor bot." One engine adapts to any business through context.
+**Business-specific behavior comes from business context (structured data about each business), not from niche-specific templates or per-industry prompt libraries.**
 
 **Three-layer agent architecture:**
 1. **Core behavior** (SYSTEM) — safety, validation, conversation flow. Shared across all agents. Not business-configurable.
-2. **Business context** (DEVELOPER) — business profile, services, FAQ, tone, policies. Per-tenant. Entered by org admin.
+2. **Business context** (DEVELOPER) — business profile, services, FAQ, tone, policies. Per-tenant. Entered by org admin. This is the business's environment.
 3. **Channel/runtime rules** — formatting, rate limits, provider constraints. Per-channel.
 
 **Single-agent runs only.** One conversation is handled by one agent. No swarms, no multi-agent coordination.
@@ -58,6 +60,8 @@ It is a **single shared engine** with exactly **two operating modes**:
 - Not an AI sandbox or experimentation platform
 - Not a streaming pipeline system
 - Not an autonomous web scraper (all ingested content requires human review)
+- Not an embedded operator inside third-party software (no CRM/helpdesk/dialer integration as core direction)
+- Not an adapter marketplace for external business software
 
 If a request would add any of the above, stop and ask before proceeding.
 

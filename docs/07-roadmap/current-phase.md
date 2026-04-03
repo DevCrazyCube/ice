@@ -103,7 +103,7 @@ Do not implement any of the following until the phase changes:
 
 Begins only after Phase 1 completion criteria above are met.
 
-Phase 2 delivers the **shared conversational engine** with business context as its core differentiator:
+Phase 2 delivers **environment-aware agents** with business context as the core differentiator:
 
 1. **Business context domain model + CRUD** — `business_context` table, API endpoints (`/api/v1/agents/:agentId/context`), dashboard forms for org admins to enter business profile, services, FAQ, and tone
 2. **Three-layer prompt assembly** — SYSTEM (core behavior) + DEVELOPER (business context) + USER (message) — see `docs/05-agents/agents-overview.md`

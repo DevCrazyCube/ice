@@ -1,10 +1,12 @@
 # Agents Overview
 
-## One Shared Engine, Not a Niche-Role Library
+## Environment-Aware Agents
 
-ICE uses a **single shared conversational engine** for all agents across all tenants. Business-specific behavior comes from **business context** — structured information about the business — not from per-industry templates, niche-specific prompt libraries, or hardcoded role definitions.
+ICE agents are **environment-aware**: they learn a business from its context and respond as if they belong in that business's environment.
 
-There is no "dentist bot," "realtor bot," or "plumber bot." There is one engine that reads business context and responds as if it belongs to that business.
+ICE uses a **single shared engine** for all agents across all tenants. Business-specific behavior comes from **business context** (the business's environment) — not from per-industry templates, niche-specific prompt libraries, or hardcoded role definitions.
+
+There is no "dentist bot," "realtor bot," or "plumber bot." There is one engine that reads business context and responds like it belongs there.
 
 ---
 
@@ -81,14 +83,17 @@ Every ICE agent is assembled from three layers at runtime. This is the core ment
 │  SHARED across all agents, all tenants.     │
 │  Never modified by business context.        │
 ├─────────────────────────────────────────────┤
-│  Layer 2: Business Context (DEVELOPER)      │
+│  Layer 2: Business Context / Environment    │
+│  (DEVELOPER)                                │
 │                                             │
 │  Business profile, services, FAQ,           │
-│  tone/style, product catalog, policies      │
+│  tone/style, product catalog, goals,        │
+│  constraints, policies                      │
 │                                             │
 │  PER-TENANT. Configured by org admin.       │
-│  This is what makes a dental practice       │
-│  agent different from a law firm agent.     │
+│  This is the business's environment —       │
+│  what makes a dental practice agent         │
+│  different from a law firm agent.           │
 ├─────────────────────────────────────────────┤
 │  Layer 3: Channel & Runtime Rules           │
 │                                             │
@@ -108,10 +113,10 @@ Every ICE agent is assembled from three layers at runtime. This is the core ment
 - **Never contains business-specific content**
 - **Never modified by org admins** — this is platform-level code
 
-### Layer 2: Business Context (Per-Tenant)
+### Layer 2: Business Context — The Business Environment (Per-Tenant)
 
 - Injected into the **DEVELOPER** role of the prompt
-- Contains everything the engine needs to know about this specific business:
+- This is the business's environment — everything the engine needs to know about this specific business:
   - Business profile (name, industry, services, hours, location)
   - Product/service catalog (offerings, pricing, features)
   - FAQ / knowledge (common questions, approved answers)
@@ -134,7 +139,7 @@ Every ICE agent is assembled from three layers at runtime. This is the core ment
 This architecture ensures:
 1. **Safety is not business-configurable.** Core behavior (Layer 1) cannot be overridden by business context (Layer 2).
 2. **One engine serves all businesses.** No per-niche code paths, templates, or prompt libraries.
-3. **Business specificity comes from data, not code.** Adding a new business type means entering business context, not writing new prompts or skills.
+3. **Environment-awareness comes from data, not code.** Adding a new business type means entering business context (describing the environment), not writing new prompts or skills.
 4. **Channel adaptation is mechanical, not behavioral.** Formatting for SMS vs web doesn't change what the agent knows — only how it formats the response.
 
 ---
@@ -228,3 +233,4 @@ Do not write LLM calls, tool invocations, or agent logic until Phase 2 begins.
 - **No prompt zoo.** One prompt architecture (three layers), parameterised by business context.
 - **No autonomous scraping in Phase 2.** Manual structured context first. Ingestion automation is Phase 3+.
 - **No hardcoded business knowledge in code.** All business knowledge comes from the `business_context` table, never from source code.
+- **No embedded operator mode.** ICE does not act inside third-party CRM/helpdesk/dialer software. It is an agent platform, not middleware.

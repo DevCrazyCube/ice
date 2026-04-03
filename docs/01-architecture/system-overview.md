@@ -2,9 +2,9 @@
 
 ## Core Architectural Pattern
 
-ICE is a **shared adaptive conversational engine** that uses **event-driven ingestion with asynchronous processing** as its primary architectural pattern.
+ICE is an **environment-aware agent platform** built on **event-driven ingestion with asynchronous processing** as its primary architectural pattern.
 
-The engine is shared across all tenants and agent types. Business-specific behavior is driven by **business context** (structured data about each business) — not by niche-specific templates or hardcoded per-industry roles. See `docs/00-product/adaptive-business-context.md` for the product direction.
+ICE agents are environment-aware: they learn a business from its context and respond as if they belong in that environment. The engine is shared across all tenants and agent types. Business-specific behavior is driven by **business context** (the business's environment) — not by niche-specific templates or hardcoded per-industry roles. See `docs/00-product/adaptive-business-context.md` for the product direction.
 
 The async-first design is both a cost-control and security decision. OWASP API Security Top 10 (2023) explicitly identifies "Unrestricted Resource Consumption" — including costs paid per API request (SMS, LLM tokens) — as a top API risk. Asynchronous pipelines enforce budgets, retries, and backpressure.
 
@@ -175,7 +175,7 @@ Trace IDs propagate from ingest → worker → outbound.
 
 | Decision | Choice | Reason |
 |----------|--------|--------|
-| Shared engine, not niche templates | One runtime, business context drives behavior | Scales to any industry without per-niche code |
+| Environment-aware, not niche templates | One runtime, business context drives behavior | Scales to any industry without per-niche code |
 | Async webhook processing | Outbox → worker | Cost control, retries, DoS protection |
 | Single datastore | Postgres + pgvector | Minimal ops, simple tenancy, vectors included |
 | Redis | Optional | Only for rate-limit + idempotency; not required in Phase 1 |

@@ -52,12 +52,18 @@ ICE agents are environment-aware — they adapt to each business through **busin
 
 ### What Business Context Is
 
-Structured information that tells the engine how to behave for a specific business:
-- **Business profile** — name, industry, services, operating hours, location
-- **Product/service catalog** — what the business offers, pricing tiers, key features
-- **Tone and style** — formal vs casual, brand voice guidelines
-- **Policy rules** — what the agent can and cannot say, escalation triggers, disclaimers
-- **FAQ / knowledge** — common questions and approved answers
+Structured, categorized data that tells the engine how to behave for a specific business. Organized into three practical groupings:
+
+**A. Identity** — What business is this?
+- Business name, type/category, summary, locale, timezone, locations
+
+**B. Operations** — What does the business actually do?
+- Services/products (descriptions, pricing hints), FAQ, hours, policies, constraints, contact/booking rules
+
+**C. Intent & Style** — How should the agent behave?
+- Preferred tone, goals, escalation rules, brand voice, disallowed claims
+
+BusinessContext is stored as typed, categorized entries (not a single unstructured blob). Each entry has a category, title, content, and sort order. See `docs/00-product/adaptive-business-context.md` for the full structured model.
 
 ### How Context Evolves Across Phases
 
@@ -67,12 +73,15 @@ Structured information that tells the engine how to behave for a specific busine
 | Phase 3+ | Semi-automated ingestion | Import from website, documents, social profiles (with human review) |
 | Phase 4+ | Retrieval over context | pgvector search over ingested and structured context at runtime |
 
+**Scraping does NOT come first. Ingestion does NOT come first. RAG does NOT come first.** Manual structured context validates the architecture before automation is added.
+
 ### What Business Context Is NOT
 
 - Not a "prompt zoo" — there is no library of per-niche system prompts
 - Not a template marketplace — businesses don't pick from "dentist template" or "realtor template"
+- Not an unstructured blob — context is typed, categorized entries with validation
 - Not autonomous scraping — even future ingestion requires validation and human review
-- Not a replacement for policy — business context informs tone and knowledge; policy rules remain explicit configuration
+- Not a replacement for runtime policy — business context informs tone and knowledge; agent safety rules remain in AgentSpec, not BusinessContext
 
 See `docs/00-product/adaptive-business-context.md` for the detailed design direction.
 

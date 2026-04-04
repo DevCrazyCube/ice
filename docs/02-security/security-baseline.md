@@ -183,34 +183,45 @@ Controls mapped to OWASP LLM Top 10:
 
 ---
 
-## 8a. Business Context Ingestion Security (Phase 2+)
+## 8a. Business Context Security (Phase 2+)
 
-ICE agents derive business-specific behavior from **business context** — structured data about the business (profile, services, FAQ, tone, policies). In later phases, this context may be ingested from external sources (websites, documents, social profiles). All ingested content is **untrusted input** regardless of source.
+ICE agents derive business-specific behavior from **BusinessContext** — structured, categorized data about the business (identity, operations, intent/style). BusinessContext is stored as typed entries in the `business_context` table, NOT as an unstructured blob. In later phases, context may be ingested from external sources (websites, documents, social profiles). All ingested content is **untrusted input** regardless of source.
 
 ### Trust Boundaries
 
 | Context Source | Trust Level | Required Controls |
 |---------------|-------------|-------------------|
-| Org admin manual entry (dashboard forms) | Semi-trusted | Zod validation, length limits, sanitisation |
-| Website scrape (Phase 3+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
-| Document upload (Phase 3+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
-| Social profile import (Phase 4+) | Untrusted | Validation, sanitisation, size bounds, human review before activation |
+| Org admin manual entry (dashboard forms) | Semi-trusted | Zod validation, length limits, category enforcement, sanitisation |
+| Website scrape (Phase 3+) | Untrusted | All above + human review gate + `reviewed_at` required before `active = true` |
+| Document upload (Phase 3+) | Untrusted | All above + human review gate + `reviewed_at` required before `active = true` |
+| Social profile import (Phase 4+) | Untrusted | All above + human review gate + `reviewed_at` required before `active = true` |
+
+### Separation of Trusted Config from Business Content
+
+BusinessContext (business environment data) must remain strictly separate from trusted configuration:
+
+- **AgentSpec** (runtime policy — mode, autonomy limits, tool allowlist, escalation triggers) is trusted configuration, NOT derived from business context
+- **TenantPolicy** (rate limits, content policy, token budgets) is trusted configuration, NOT derived from business context
+- **SYSTEM prompt** (Layer 1 — safety rules, output validation) is platform code, NOT modifiable by business context
+- **User input** (conversation messages) is always untrusted and never mixed with business context or system instructions
+
+Business context is DEVELOPER-layer data. Trusted policy is SYSTEM-layer or config-layer. These boundaries must never be crossed.
 
 ### Security Requirements for All Business Context
 
 1. **Structural separation from system instructions.** Business context is injected into the DEVELOPER layer of the prompt, never into the SYSTEM layer. Safety rules and core behavior remain in SYSTEM, isolated from context that could contain adversarial content.
 
-2. **Validation and sanitisation.** All business context — whether entered manually or ingested — must pass through Zod schema validation. Content must be bounded (max lengths), stripped of executable content (scripts, HTML), and checked for obvious injection patterns.
+2. **Validation and sanitisation.** All business context — whether entered manually or ingested — must pass through Zod schema validation. Content must be bounded (max lengths per entry: 10,000 chars), stripped of executable content (scripts, HTML), and checked for obvious injection patterns. Each entry has a validated category, title, and content.
 
 3. **Size limits.** Per-tenant limits on total context volume. Prevents resource exhaustion and prompt stuffing.
 
-4. **Human review gate for automated ingestion.** Content ingested from websites, documents, or social profiles must be staged for org admin review before it becomes active context. No scraped content enters the live prompt without explicit approval.
+4. **Human review gate for automated ingestion.** Content ingested from websites, documents, or social profiles must be staged for org admin review before it becomes active context. No scraped content enters the live prompt without explicit approval. The `active` flag and `reviewed_at` timestamp enforce this in the schema.
 
-5. **Audit trail.** All business context changes (create, update, delete, approve) must produce audit events. Source of ingestion recorded.
+5. **Audit trail.** All business context changes (create, update, delete, approve) must produce audit events. Source of ingestion recorded via the `source` field.
 
 6. **No executable content.** Business context is treated as data, never as instructions. The engine reads context to understand what the business does — it does not execute arbitrary instructions found in context.
 
-7. **Tenant isolation.** Business context is scoped to `organisation_id`. No cross-tenant context access. Context retrieval (pgvector, Phase 4+) must enforce tenant boundaries in every query.
+7. **Tenant isolation.** Business context is scoped to `organisation_id`. No cross-tenant context access. Every query on `business_context` must filter by `organisation_id`. Context retrieval (pgvector, Phase 4+) must enforce tenant boundaries in every query.
 
 ---
 

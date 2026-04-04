@@ -217,13 +217,13 @@ organisations ||--o{ audit_events  : logs
 
 ---
 
-## Phase 2 Additions (Not Yet)
+## Phase 2 Entities
 
-When Phase 2 begins, add:
+### BusinessContext (Phase 2 — Structured Manual Entry)
 
-### Business Context (Phase 2 — Structured Manual Entry)
+BusinessContext drives the adaptive behavior of the shared engine. Each entry is one piece of a business's environment, stored as a typed, categorized row. This is NOT a single blob — it is structured data organized into three practical groupings.
 
-Business context drives the adaptive behavior of the shared engine. In Phase 2, context is entered manually by the org admin via dashboard forms.
+**Migration:** `008_business_context.sql` (implemented)
 
 ```
 business_context {
@@ -242,16 +242,34 @@ business_context {
 }
 ```
 
+**Category → Grouping mapping:**
+
+| Category | Grouping | What it captures |
+|----------|----------|-----------------|
+| `profile` | **A. Identity** | Business name, type, summary, locale, locations |
+| `services` | **B. Operations** | Products/services offered, pricing hints |
+| `faq` | **B. Operations** | Common questions with approved answers |
+| `knowledge` | **B. Operations** | Policies, contact rules, verified facts, hours |
+| `tone` | **C. Intent/Style** | Preferred tone, brand voice, goals, escalation preferences |
+
+See `docs/00-product/adaptive-business-context.md` for the full three-grouping model (Identity / Operations / Intent & Style).
+
 **Key design decisions:**
 - `organisation_id` filter on every query (tenant isolation)
+- `agent_id` scoping — Phase 2 stores entries per agent; future org-level base context with agent-level override is a Phase 3+ consideration
 - `source` field tracks provenance — `manual` for Phase 2; future ingestion sources added in Phase 3+
 - `reviewed_at` is NULL for manual entries (implicitly reviewed by the person entering them); required non-NULL for auto-ingested content before it becomes `active`
 - `active` flag allows staging content before it enters the live prompt
 - Content is validated/sanitised at write time — business context is semi-trusted input (see `docs/02-security/security-baseline.md §8a`)
 
+**BusinessContext vs AgentSpec boundary:**
+- BusinessContext describes the **business** (identity, operations, intent/style) — stored in `business_context` table
+- AgentSpec describes the **agent runtime policy** (mode, persona, autonomy limits, tool allowlist, safety contract) — stored as JSONB in `agents.spec`
+- Business-specific knowledge (services, FAQ, tone, goals) belongs in BusinessContext, not AgentSpec
+
 > **Note:** Do not build ingestion pipelines (website scraper, document processor) in Phase 2. Phase 2 is manual structured context only. The schema supports future sources but the ingestion code is Phase 3+.
 
-### Other Phase 2 Entities
+### Other Phase 2 Entities (Future)
 
 ```
 agent_runs       — one per conversation turn

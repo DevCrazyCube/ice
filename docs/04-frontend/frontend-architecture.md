@@ -103,4 +103,4 @@ function useResource() {
 4. **TypeScript strict mode.** All components fully typed, no `any`.
 5. **No raw message content rendered without sanitisation.**
 6. **Auth context always from server-side session** — never from URL params or client state.
-7. **No niche-template selectors.** Agent setup flows must use generic business context forms (business profile, services, FAQ, tone), not per-industry templates ("dental practice," "law firm," etc.). The same forms work for every business type.
+7. **No niche-template selectors.** Agent setup flows must use structured BusinessContext forms organized by grouping (Identity: business profile, locale, locations; Operations: services, FAQ, hours, constraints; Intent/Style: tone, goals, escalation rules), not per-industry templates ("dental practice," "law firm," etc.). The same forms work for every business type. See `docs/00-product/adaptive-business-context.md`.

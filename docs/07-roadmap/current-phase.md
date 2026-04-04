@@ -31,23 +31,28 @@ Deliver **environment-aware agents** with business context as the core different
 
 ## Phase 2 In Scope
 
-- Structured manual business context (profile, services, FAQ, tone, knowledge)
+- **Structured manual BusinessContext** — typed, categorized entries (Identity / Operations / Intent & Style)
 - Three-layer prompt architecture (SYSTEM / DEVELOPER / CHANNEL)
 - Inbound agent runtime loop through the outbox worker
-- Business context CRUD for org admins
+- BusinessContext CRUD for org admins (dashboard forms)
 - LLM API integration (single provider)
 - Output validation and guardrails
 - Tool gateway with strict allowlists
 - Audit events for agent processing, context changes
+- Clean separation: BusinessContext (business environment) vs AgentSpec (runtime policy)
 
 ## Phase 2 Out of Scope
 
 - Automated context ingestion (website scraping, document processing) — Phase 3+
 - pgvector / RAG / retrieval — Phase 4+
 - Per-industry prompt templates or niche-specific roles — never
+- Unstructured context blob — entries must be typed and categorized
+- Org-level base context with agent-level override (Phase 3+ when multi-agent orgs are common)
 - Acquisition mode state machine — Phase 3
 - Stripe billing — Phase 3
 - Conversation state machine — Phase 3
+
+**Phase 2 sequence: manual structured context → runtime uses it → validate the architecture. Scraping, ingestion, and RAG come later.**
 
 ---
 

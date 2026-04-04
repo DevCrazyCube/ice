@@ -37,11 +37,18 @@ ICE has exactly **two operating modes**:
 1. **Acquisition Mode** — qualifies new leads, educates on the product, makes a timed offer, triggers checkout/provisioning with explicit user consent.
 2. **Client Inbound Mode** — handles inbound conversations for client businesses; answers, qualifies, routes, or escalates safely.
 
-**Business-specific behavior comes from business context (structured data about each business), not from niche-specific templates or per-industry prompt libraries.**
+**Business-specific behavior comes from BusinessContext (structured, categorized data about each business), not from niche-specific templates or per-industry prompt libraries.**
+
+**BusinessContext is organized into three groupings:**
+- **A. Identity** — what the business is (name, type, summary, locale, locations)
+- **B. Operations** — what the business does (services, FAQ, hours, policies, constraints)
+- **C. Intent & Style** — how the agent should behave (tone, goals, escalation rules, brand voice)
+
+**BusinessContext vs AgentSpec:** BusinessContext describes the business environment. AgentSpec describes the agent runtime policy (mode, autonomy limits, tool allowlist, safety contract). Do not conflate them.
 
 **Three-layer agent architecture:**
 1. **Core behavior** (SYSTEM) — safety, validation, conversation flow. Shared across all agents. Not business-configurable.
-2. **Business context** (DEVELOPER) — business profile, services, FAQ, tone, policies. Per-tenant. Entered by org admin. This is the business's environment.
+2. **BusinessContext** (DEVELOPER) — structured per-tenant data: identity, operations, intent/style. Entered by org admin. This is the business's environment.
 3. **Channel/runtime rules** — formatting, rate limits, provider constraints. Per-channel.
 
 **Single-agent runs only.** One conversation is handled by one agent. No swarms, no multi-agent coordination.
@@ -218,6 +225,9 @@ Security standards: NIST SP 800-53 Rev.5, SP 800-207 (zero trust), SP 800-61 Rev
 - Making irreversible side effects (billing, provisioning) without explicit user consent
 - **Treating scraped/ingested content as trusted input** (always validate, sanitise, require human review)
 - **Building full RAG/scraping systems before manual context is validated** (Phase 2 = manual structured context only)
+- **Storing BusinessContext as an unstructured blob** (must be typed, categorized entries — not a single text field)
+- **Putting business knowledge in AgentSpec** (services, FAQ, tone, goals belong in BusinessContext; runtime policy belongs in AgentSpec)
+- **Conflating trusted config (AgentSpec, TenantPolicy) with business content (BusinessContext)** — these are separate trust domains
 
 ---
 

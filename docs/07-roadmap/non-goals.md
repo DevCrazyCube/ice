@@ -28,6 +28,9 @@ These will never be part of ICE:
 - **Legacy compatibility layers** — Replace old code, do not maintain both paths.
 - **Synchronous LLM calls in webhook handlers** — Always async; always outbox pattern.
 - **Autonomous scraping without human review** — All ingested business context (website, documents, social) must be reviewed and approved by the org admin before entering the live prompt.
+- **Unstructured context blob** — BusinessContext must be typed, categorized entries (Identity / Operations / Intent & Style). Never a single large text field. See `docs/00-product/adaptive-business-context.md`.
+- **Premature ingestion or RAG** — Manual structured context (Phase 2) must be validated before adding ingestion (Phase 3) or retrieval (Phase 4). Scraping does NOT come first.
+- **Conflating BusinessContext with AgentSpec** — Business environment (services, FAQ, tone, goals) belongs in BusinessContext. Runtime policy (autonomy limits, tool allowlist, safety triggers) belongs in AgentSpec. Do not mix them.
 - **Embedded operator mode** — ICE does not act inside third-party software (CRMs, helpdesks, dialers). It is an agent platform that handles conversations, not middleware that operates external business tools.
 - **Adapter capability marketplace** — No architecture for discovering or executing actions inside third-party business software. ICE responds to conversations — it does not drive external software on behalf of businesses.
 - **CRM / helpdesk / dialer integration as product direction** — ICE is not "AI inside your sales stack." Integration with external tools may happen as simple webhook/API connections at the edges, never as a core architectural concern.
@@ -76,3 +79,6 @@ These will never be part of ICE:
 - Hardcoded business knowledge in source code (all business knowledge belongs in `business_context` table)
 - Niche-specific UI components (e.g., "dental practice setup wizard")
 - Treating ingested/scraped content as trusted input
+- Storing business context as a single unstructured blob instead of typed categorized entries
+- Putting business-specific knowledge (services, FAQ, tone) in AgentSpec instead of BusinessContext
+- Building ingestion/scraping before manual structured context is validated

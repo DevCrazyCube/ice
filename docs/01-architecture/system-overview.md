@@ -27,7 +27,7 @@ Channel webhook
   → Outbound Sender (send reply via channel provider — Phase 2+)
 ```
 
-The worker loads business context (Layer 2) and channel rules (Layer 3) alongside the shared core behavior (Layer 1) to produce responses that are specific to each business without requiring niche-specific code paths.
+The worker loads BusinessContext entries (Layer 2 — identity, operations, intent/style) and channel rules (Layer 3) alongside the shared core behavior (Layer 1) to produce responses that are specific to each business without requiring niche-specific code paths. BusinessContext is structured, categorized data — not an unstructured blob. See `docs/00-product/adaptive-business-context.md`.
 
 **Data plane rule:** never block the webhook ACK on LLM processing. Acknowledge fast, process asynchronously.
 
@@ -182,3 +182,5 @@ Trace IDs propagate from ingest → worker → outbound.
 | Auth | OIDC + JWT (Phase 1) | Standard; RFC 9700 security BCP |
 | Microservices | No | Modular monolith first; decompose only if proven need |
 | Business context before RAG | Manual structured context first (Phase 2) | Validates architecture; avoids premature complexity |
+| Structured entries, not blob | BusinessContext stored as typed categorized entries | Easier validation, admin editing, future retrieval, debugging |
+| BusinessContext vs AgentSpec | Business environment in BusinessContext; runtime policy in AgentSpec | Clean separation of concerns; prevents knowledge/policy conflation |

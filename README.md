@@ -2,7 +2,12 @@
 
 ICE is a **multi-tenant environment-aware agent platform** that automates inbound conversations for businesses.
 
-One shared engine. Environment-aware agents that learn a business from its context and respond like they belong there. No niche templates.
+One shared engine. Environment-aware agents that learn a business from structured context and respond like they belong there. No niche templates.
+
+**BusinessContext** — structured, categorized data about each business — drives all business-specific behavior:
+- **Identity** — what the business is (name, type, summary, locale, locations)
+- **Operations** — what it does (services, FAQ, hours, policies, constraints)
+- **Intent & Style** — how the agent behaves (tone, goals, escalation rules)
 
 **Two operating modes:**
 

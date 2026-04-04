@@ -103,9 +103,12 @@ POST   /api/v1/agents
 GET    /api/v1/agents/:id
 PATCH  /api/v1/agents/:id
 
-# Business Context (Phase 2 — manual structured entry)
+# BusinessContext (Phase 2 — structured, categorized entries)
+# Each entry has: category, title, content, sortOrder, active
+# Categories: profile, services, faq, tone, knowledge
+# Groupings: Identity / Operations / Intent & Style
 GET    /api/v1/agents/:agentId/context          # list context entries for agent
-POST   /api/v1/agents/:agentId/context          # add context entry
+POST   /api/v1/agents/:agentId/context          # add context entry (validates category, content bounds)
 PATCH  /api/v1/agents/:agentId/context/:id      # update context entry
 DELETE /api/v1/agents/:agentId/context/:id       # remove context entry
 
@@ -122,7 +125,7 @@ GET    /api/v1/conversations/:id
 GET    /api/v1/conversations/:id/messages
 ```
 
-> **Note:** There are no `/api/v1/templates` or `/api/v1/niche-roles` endpoints. Business-specific behavior is configured through business context entries on each agent, not through a template selection API. See `docs/00-product/adaptive-business-context.md`.
+> **Note:** There are no `/api/v1/templates` or `/api/v1/niche-roles` endpoints. Business-specific behavior is configured through structured BusinessContext entries on each agent — typed, categorized data (Identity / Operations / Intent & Style), not a template selection API. See `docs/00-product/adaptive-business-context.md`.
 
 ---
 

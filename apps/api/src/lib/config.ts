@@ -43,4 +43,7 @@ export const config = {
   // Twilio — required for webhook signature verification
   twilioAuthToken: optional("TWILIO_AUTH_TOKEN", ""),
   publicWebhookUrl: optional("PUBLIC_WEBHOOK_URL", ""),
+
+  // Anthropic — required for LLM-powered agent runtime (Phase 2)
+  anthropicApiKey: optional("ANTHROPIC_API_KEY", ""),
 } as const;

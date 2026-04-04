@@ -10,9 +10,19 @@
  * No database required. Exercises the real runInbound() engine.
  */
 
+import { config as dotenvConfig } from "dotenv";
+import { resolve } from "node:path";
+
+// Load root .env for local development
+dotenvConfig({ path: resolve(import.meta.dirname, "../../../.env") });
+
 import { runInbound } from "@ice/agents";
-import type { RuntimeInput } from "@ice/agents";
+import type { RuntimeInput, LlmConfig } from "@ice/agents";
 import type { AssembledBusinessContext, AgentSpecV1 } from "@ice/schemas";
+
+const llmConfig: LlmConfig | undefined = process.env["ANTHROPIC_API_KEY"]
+  ? { apiKey: process.env["ANTHROPIC_API_KEY"] }
+  : undefined;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -166,8 +176,8 @@ async function main() {
     console.log(`\n--- ${scenario.name} ---`);
     console.log(`Input: "${scenario.message}"\n`);
 
-    const dentistOut = await runInbound(buildInput(scenario.message, DENTIST_CTX));
-    const plumberOut = await runInbound(buildInput(scenario.message, PLUMBER_CTX));
+    const dentistOut = await runInbound(buildInput(scenario.message, DENTIST_CTX), { llmConfig });
+    const plumberOut = await runInbound(buildInput(scenario.message, PLUMBER_CTX), { llmConfig });
 
     console.log("  DENTIST:");
     console.log(`    Decision: ${dentistOut.decision.type} (${dentistOut.decision.confidence})`);

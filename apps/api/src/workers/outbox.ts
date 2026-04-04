@@ -1,9 +1,10 @@
 import { context } from "@opentelemetry/api";
 import { getDb, extractTraceContext, withSpan, recordAuditEvent } from "@ice/core";
 import { runInbound } from "@ice/agents";
-import type { RuntimeInput, InboundMessage } from "@ice/agents";
+import type { RuntimeInput, InboundMessage, LlmConfig } from "@ice/agents";
 import type { AgentSpecV1, AssembledBusinessContext, BusinessContextEntry } from "@ice/schemas";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 interface OutboxJob {
   id: string;
@@ -344,8 +345,12 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
     businessContext,
   };
 
-  // Step 4: Run the inbound engine
-  const output = await runInbound(runtimeInput);
+  // Step 4: Run the inbound engine with LLM config
+  const llmConfig: LlmConfig | undefined = config.anthropicApiKey
+    ? { apiKey: config.anthropicApiKey }
+    : undefined;
+
+  const output = await runInbound(runtimeInput, { llmConfig });
 
   // Step 5: Log the result (no PII — log IDs and decision type only)
   logger.info(

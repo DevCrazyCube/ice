@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ice/schemas": "workspace:*"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@ice/schemas": "workspace:*",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.5.2"

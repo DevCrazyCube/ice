@@ -1,11 +1,15 @@
 /**
- * LLM caller for the inbound agent runtime.
+ * Hosted LLM caller for the inbound agent runtime.
  *
- * Sends the assembled three-layer prompt to Claude, parses the structured
- * JSON response with Zod, and maps it to a RuntimeDecision.
+ * This module is opt-in. The runtime uses the deterministic stub by default.
+ * Provide an LlmConfig with a valid apiKey to route decisions through Claude.
  *
- * Handles: timeout, API errors, malformed output, validation failures.
- * All failures fall back to a safe "no_response" decision.
+ * Sends the assembled three-layer prompt, parses the structured JSON response
+ * with Zod, and returns a validated RuntimeDecision — or null on any failure
+ * (timeout, API error, malformed output, validation failure).
+ *
+ * Returning null tells the caller to fall back to the stub. The LLM layer
+ * has no opinion about what happens when it cannot respond.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -30,6 +34,7 @@ export type LlmResponse = z.infer<typeof llmResponseSchema>;
 // ---------------------------------------------------------------------------
 
 export interface LlmConfig {
+  /** Anthropic API key. Required to enable hosted LLM path. */
   apiKey: string;
   /** Model ID — defaults to claude-sonnet-4-20250514 */
   model?: string;
@@ -58,7 +63,7 @@ function getClient(apiKey: string): Anthropic {
 }
 
 // ---------------------------------------------------------------------------
-// The structured JSON instruction appended to the system prompt
+// Structured JSON instruction appended to the system prompt
 // ---------------------------------------------------------------------------
 
 const JSON_INSTRUCTION = `
@@ -78,37 +83,23 @@ Rules for the JSON response:
 - Do NOT wrap the JSON in markdown code fences or add any text outside the JSON object`;
 
 // ---------------------------------------------------------------------------
-// Safe fallback decision
-// ---------------------------------------------------------------------------
-
-const FALLBACK_DECISION: RuntimeDecision = {
-  type: "no_response",
-  replyText: "I'm sorry, I'm unable to process your request right now. Please try again shortly.",
-  escalationReason: null,
-  confidence: "low",
-};
-
-// ---------------------------------------------------------------------------
 // Core LLM call
 // ---------------------------------------------------------------------------
 
 /**
  * Call Claude with the three-layer prompt and return a validated RuntimeDecision.
  *
- * On any failure (timeout, API error, malformed output, validation failure),
- * returns a safe fallback decision instead of throwing.
+ * Returns null on any failure: timeout, API error, malformed output, or Zod
+ * validation failure. The caller is responsible for deciding what to do with null
+ * (typically: run the stub instead).
  */
 export async function callLlm(
   runtimeContext: RuntimeContext,
   config: LlmConfig
-): Promise<{ decision: RuntimeDecision; fallback: boolean }> {
+): Promise<RuntimeDecision | null> {
   const model = config.model ?? DEFAULT_MODEL;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxTokens = config.maxTokens ?? DEFAULT_MAX_TOKENS;
-
-  if (!config.apiKey) {
-    return { decision: FALLBACK_DECISION, fallback: true };
-  }
 
   const client = getClient(config.apiKey);
 
@@ -138,19 +129,14 @@ export async function callLlm(
     // Extract text content from the response
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return { decision: FALLBACK_DECISION, fallback: true };
+      return null;
     }
 
     // Parse and validate the JSON response
-    const decision = parseAndValidate(textBlock.text);
-    if (!decision) {
-      return { decision: FALLBACK_DECISION, fallback: true };
-    }
-
-    return { decision, fallback: false };
+    return parseAndValidate(textBlock.text);
   } catch {
-    // Timeout, network error, API error — all fall back safely
-    return { decision: FALLBACK_DECISION, fallback: true };
+    // Timeout, network error, API error — return null, caller uses stub
+    return null;
   }
 }
 

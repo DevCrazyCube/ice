@@ -4,8 +4,21 @@
  * Uses business context (the business's environment) to answer, qualify,
  * route, or escalate. Powered by the shared three-layer prompt architecture.
  *
- * Phase 2: assembles the three-layer prompt, calls Claude for a structured
- * decision, validates output with Zod, falls back safely on any failure.
+ * Decision engine modes (selected via RunInboundOptions):
+ *
+ *   STUB (default, no API key required):
+ *     Deterministic keyword-based responder. Works offline. Always returns a
+ *     meaningful, context-aware reply based on the business context entries.
+ *     This is the normal operating mode for local development and testing.
+ *
+ *   LLM (opt-in, requires ANTHROPIC_API_KEY):
+ *     Routes the assembled three-layer prompt through Claude. Output is
+ *     validated against a strict Zod schema before use. On any LLM failure
+ *     (timeout, API error, invalid output), the stub runs instead so the
+ *     engine always produces a usable response.
+ *
+ * The three-layer prompt architecture (systemPrompt / developerPrompt /
+ * channelRules) and all runtime contracts are unchanged by mode selection.
  */
 
 import type {
@@ -90,33 +103,110 @@ function assembleContext(input: RuntimeInput): RuntimeContext {
 }
 
 // ---------------------------------------------------------------------------
-// Decision engine — real LLM call with structured output validation
+// Stub decision engine — default mode, no external dependencies
 // ---------------------------------------------------------------------------
 
 /**
- * Call Claude to make a decision based on the three-layer prompt context.
+ * Deterministic, keyword-based responder.
  *
- * Falls back to a safe no_response decision on any failure (timeout, API
- * error, malformed output, validation failure).
+ * This is the default decision engine. It requires no API key, no network,
+ * and no external services. It searches the assembled business context for
+ * relevant entries and constructs a context-aware reply.
+ *
+ * Also serves as the safety net when the LLM path is enabled but fails.
  */
-async function makeDecision(
-  runtimeContext: RuntimeContext,
-  llmConfig: LlmConfig | null
-): Promise<{ decision: RuntimeDecision; fallback: boolean }> {
-  // No API key configured — return safe fallback
-  if (!llmConfig || !llmConfig.apiKey) {
+function stubDecision(context: RuntimeContext, input: RuntimeInput): RuntimeDecision {
+  const userMsg = context.userMessage.toLowerCase().trim();
+
+  // Escalation check — user explicitly requests a human
+  if (
+    userMsg.includes("human") ||
+    userMsg.includes("agent") ||
+    userMsg.includes("person") ||
+    userMsg.includes("speak to someone")
+  ) {
     return {
-      decision: {
-        type: "no_response",
-        replyText: "I'm sorry, I'm unable to process your request right now. Please try again shortly.",
-        escalationReason: null,
-        confidence: "low",
-      },
-      fallback: true,
+      type: "escalate",
+      replyText: "I'll connect you with a human now. One moment please.",
+      escalationReason: "User requested human agent",
+      confidence: "high",
     };
   }
 
-  return callLlm(runtimeContext, llmConfig);
+  // Search business context entries for keyword matches
+  const entries = input.businessContext.entries;
+  const matchedEntries = entries.filter((entry) => {
+    const titleLower = entry.title.toLowerCase();
+    const contentLower = entry.content.toLowerCase();
+    const words = userMsg.split(/\s+/).filter((w) => w.length > 2);
+    return words.some((w) => titleLower.includes(w) || contentLower.includes(w));
+  });
+
+  if (matchedEntries.length > 0) {
+    const best = matchedEntries[0]!;
+    return {
+      type: "reply",
+      replyText: `Based on our ${best.category} information: ${best.content}`,
+      escalationReason: null,
+      confidence: "medium",
+    };
+  }
+
+  // No match — summarize what the business offers
+  const profileEntry = entries.find((e) => e.category === "profile");
+  const serviceEntries = entries.filter((e) => e.category === "services");
+  const businessName = profileEntry?.content.split(".")[0] ?? "our business";
+
+  if (serviceEntries.length > 0) {
+    const serviceList = serviceEntries
+      .slice(0, 2)
+      .map((e) => e.title)
+      .join(", ");
+    return {
+      type: "reply",
+      replyText: `We offer ${serviceList}. For more information, please contact us directly. Is there something specific I can help with?`,
+      escalationReason: null,
+      confidence: "low",
+    };
+  }
+
+  return {
+    type: "reply",
+    replyText: `Thank you for contacting ${businessName}. I don't have specific information about that topic yet. Would you like me to connect you with someone who can help?`,
+    escalationReason: null,
+    confidence: "low",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Decision routing — stub by default, LLM when configured
+// ---------------------------------------------------------------------------
+
+/**
+ * Route the decision to the appropriate engine.
+ *
+ * - No llmConfig → stub (deterministic, always succeeds)
+ * - llmConfig present → attempt LLM; on null return → stub
+ *
+ * Returns the decision and which engine produced it.
+ */
+async function makeDecision(
+  runtimeContext: RuntimeContext,
+  input: RuntimeInput,
+  llmConfig: LlmConfig | null
+): Promise<{ decision: RuntimeDecision; engine: "stub" | "llm" | "llm-stub-fallback" }> {
+  if (!llmConfig) {
+    return { decision: stubDecision(runtimeContext, input), engine: "stub" };
+  }
+
+  const llmDecision = await callLlm(runtimeContext, llmConfig);
+
+  if (llmDecision !== null) {
+    return { decision: llmDecision, engine: "llm" };
+  }
+
+  // LLM returned null (timeout, API error, validation failure) — use stub
+  return { decision: stubDecision(runtimeContext, input), engine: "llm-stub-fallback" };
 }
 
 /**
@@ -142,15 +232,26 @@ function formatReply(
 
 /** Options for the inbound engine */
 export interface RunInboundOptions {
-  /** LLM configuration. If omitted or apiKey is empty, returns a safe fallback. */
+  /**
+   * Hosted LLM configuration. Optional.
+   *
+   * When provided with a valid apiKey, the engine routes decisions through
+   * Claude. When omitted (or apiKey is empty), the deterministic stub runs.
+   *
+   * The stub is the correct default for local development and test
+   * environments where no API key is present.
+   */
   llmConfig?: LlmConfig;
 }
 
 /**
  * Run the inbound agent engine for a single message turn.
  *
- * Assembles the three-layer prompt, calls Claude for a structured decision,
- * validates the output, formats the reply, and returns a RuntimeOutput.
+ * Default mode (no options): deterministic stub, no external dependencies.
+ * LLM mode (options.llmConfig set): hosted Claude call with stub fallback.
+ *
+ * success is true in both modes. It is only false if an uncaught exception
+ * prevents any decision from being produced.
  */
 export async function runInbound(
   input: RuntimeInput,
@@ -162,11 +263,11 @@ export async function runInbound(
     // Step 1: Assemble three-layer context
     const runtimeContext = assembleContext(input);
 
-    // Step 2: Make a decision via LLM (falls back safely on any failure)
-    const { decision, fallback } = await makeDecision(
-      runtimeContext,
-      options?.llmConfig ?? null
-    );
+    // Step 2: Route to stub (default) or LLM (opt-in)
+    const llmConfig =
+      options?.llmConfig?.apiKey ? options.llmConfig : null;
+
+    const { decision, engine } = await makeDecision(runtimeContext, input, llmConfig);
 
     // Step 3: Format reply for channel
     const formattedReply = formatReply(
@@ -175,11 +276,13 @@ export async function runInbound(
     );
 
     return {
-      success: !fallback,
+      success: true,
       decision,
       formattedReply,
       durationMs: Date.now() - start,
-      error: fallback ? "LLM call failed — returned fallback response" : null,
+      // Report which engine ran — useful for observability, not an error signal.
+      // "llm-stub-fallback" means the LLM was configured but failed; stub ran instead.
+      error: engine === "llm-stub-fallback" ? "LLM unavailable — stub used" : null,
     };
   } catch (err) {
     return {

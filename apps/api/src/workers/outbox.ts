@@ -345,14 +345,18 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
     businessContext,
   };
 
-  // Step 4: Run the inbound engine with LLM config
+  // Step 4: Run the inbound engine.
+  // Default mode: deterministic stub (no API key required).
+  // Opt-in LLM mode: set ANTHROPIC_API_KEY in the environment.
   const llmConfig: LlmConfig | undefined = config.anthropicApiKey
     ? { apiKey: config.anthropicApiKey }
     : undefined;
 
   const output = await runInbound(runtimeInput, { llmConfig });
 
-  // Step 5: Log the result (no PII — log IDs and decision type only)
+  // Step 5: Log the result (no PII — log IDs and decision type only).
+  // engine: "stub" = default mode; "llm" = hosted LLM; "llm-stub-fallback" = LLM failed, stub ran.
+  // success is always true when any decision was produced; false only on uncaught errors.
   logger.info(
     {
       jobId: job.id,
@@ -362,6 +366,7 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
       confidence: output.decision.confidence,
       durationMs: output.durationMs,
       success: output.success,
+      ...(output.error ? { engineNote: output.error } : {}),
     },
     "Worker: message.process completed"
   );

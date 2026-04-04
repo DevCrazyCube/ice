@@ -274,24 +274,17 @@ async function test2_NoContextFallback() {
 
   const output = await runInbound(input, RUN_OPTIONS);
 
-  assert.ok(output.decision.replyText, "Should provide a fallback message");
-
-  if (HAS_API_KEY) {
-    assert.strictEqual(output.success, true, "Should handle empty context gracefully");
-    assert.ok(
-      output.decision.replyText!.toLowerCase().includes("don't have") ||
-        output.decision.replyText!.toLowerCase().includes("not been configured") ||
-        output.decision.replyText!.toLowerCase().includes("no information") ||
-        output.decision.replyText!.toLowerCase().includes("no business context"),
-      "LLM reply should indicate lack of context"
-    );
-  } else {
-    // In fallback mode (no API key), returns the safe default message
-    assert.ok(
-      output.decision.replyText!.includes("unable to process"),
-      "Fallback message should be the safe default"
-    );
-  }
+  // Stub runs in both modes when context is empty — always success: true
+  assert.strictEqual(output.success, true, "Should handle empty context gracefully");
+  assert.ok(output.decision.replyText, "Should provide a reply");
+  assert.ok(
+    output.decision.replyText!.toLowerCase().includes("don't have") ||
+      output.decision.replyText!.toLowerCase().includes("not been configured") ||
+      output.decision.replyText!.toLowerCase().includes("no information") ||
+      output.decision.replyText!.toLowerCase().includes("no business context") ||
+      output.decision.replyText!.toLowerCase().includes("specific information"),
+    "Reply should indicate lack of configured context"
+  );
 
   console.log("  Fallback reply:", output.decision.replyText?.substring(0, 80));
   console.log("  ✓ PASS: Safe fallback provided");

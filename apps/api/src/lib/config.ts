@@ -44,6 +44,8 @@ export const config = {
   twilioAuthToken: optional("TWILIO_AUTH_TOKEN", ""),
   publicWebhookUrl: optional("PUBLIC_WEBHOOK_URL", ""),
 
-  // Anthropic — required for LLM-powered agent runtime (Phase 2)
+  // Anthropic — optional. When set, the inbound engine routes decisions through
+  // Claude. When unset, the deterministic stub runs instead. The stub is the
+  // correct default for local development and environments without API access.
   anthropicApiKey: optional("ANTHROPIC_API_KEY", ""),
 } as const;

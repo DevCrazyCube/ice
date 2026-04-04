@@ -20,6 +20,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@ice/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@ice/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -114,6 +117,10 @@ importers:
         version: 5.9.3
 
   packages/agents:
+    dependencies:
+      '@ice/schemas':
+        specifier: workspace:*
+        version: link:../schemas
     devDependencies:
       typescript:
         specifier: ^5.5.2

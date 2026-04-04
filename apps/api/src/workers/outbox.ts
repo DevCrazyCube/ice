@@ -1,5 +1,8 @@
 import { context } from "@opentelemetry/api";
-import { getDb, extractTraceContext, withSpan } from "@ice/core";
+import { getDb, extractTraceContext, withSpan, recordAuditEvent } from "@ice/core";
+import { runInbound } from "@ice/agents";
+import type { RuntimeInput, InboundMessage } from "@ice/agents";
+import type { AgentSpecV1, AssembledBusinessContext, BusinessContextEntry } from "@ice/schemas";
 import { logger } from "../lib/logger.js";
 
 interface OutboxJob {
@@ -10,6 +13,30 @@ interface OutboxJob {
   status: string;
   attempts: number;
   last_error: string | null;
+}
+
+interface AgentRow {
+  id: string;
+  organisation_id: string;
+  type: string;
+  name: string;
+  status: string;
+  spec: Record<string, unknown>;
+}
+
+interface BusinessContextRow {
+  id: string;
+  organisation_id: string;
+  agent_id: string;
+  category: string;
+  title: string;
+  content: string;
+  sort_order: number;
+  active: boolean;
+  source: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const POLL_INTERVAL_MS = 1_000;
@@ -26,8 +53,6 @@ let running = false;
  * to support concurrent workers without double-processing.
  *
  * Periodically recovers stale jobs stuck in 'processing' (crash recovery).
- *
- * Phase 1: the message.process handler is a stub (no LLM calls — Phase 2+).
  */
 export function startWorker(): void {
   if (running) {
@@ -243,24 +268,174 @@ async function processOne(): Promise<boolean> {
   return true;
 }
 
-/**
- * Dispatch a job to the appropriate handler by type.
- *
- * Phase 1: message.process is a stub — no agent runtime yet (Phase 2).
- */
+// ---------------------------------------------------------------------------
+// Job dispatch — routes by job type to the appropriate handler
+// ---------------------------------------------------------------------------
+
 async function dispatch(job: OutboxJob): Promise<void> {
   switch (job.type) {
     case "message.process":
-      // Phase 1 stub — agent runtime loop not yet implemented (Phase 2+)
-      logger.info(
-        { jobId: job.id, organisationId: job.organisation_id },
-        "Worker: message.process stub — acknowledged, no-op"
-      );
+      await handleMessageProcess(job);
       break;
 
     default:
       throw new Error(`Unknown job type: ${job.type}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// message.process handler — Phase 2 inbound agent runtime
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle a message.process job: load agent + business context, run the
+ * inbound engine, persist the result, and record an audit event.
+ */
+async function handleMessageProcess(job: OutboxJob): Promise<void> {
+  const payload = job.payload;
+  const organisationId = job.organisation_id;
+  const agentId = payload["agentId"] as string | undefined;
+  const channelId = payload["channelId"] as string | undefined;
+  const channelType = (payload["channelType"] as string) ?? "sms";
+
+  if (!agentId || !channelId) {
+    throw new Error(
+      `message.process job ${job.id} missing agentId or channelId in payload`
+    );
+  }
+
+  // Extract the inbound message from the Twilio params
+  const body = payload["body"] as Record<string, string> | undefined;
+  const messageBody = body?.["Body"] ?? "";
+  const from = body?.["From"] ?? "";
+  const to = body?.["To"] ?? "";
+  const deliveryId = (payload["deliveryId"] as string) ?? job.id;
+
+  // Step 1: Load agent spec from DB (org-scoped)
+  const agent = await loadAgent(organisationId, agentId);
+  if (!agent) {
+    logger.warn(
+      { jobId: job.id, agentId, organisationId },
+      "Worker: agent not found or not active — skipping job"
+    );
+    return;
+  }
+
+  // Step 2: Load business context entries from DB (org-scoped, active only)
+  const businessContext = await loadBusinessContext(organisationId, agentId);
+
+  // Step 3: Build RuntimeInput
+  const message: InboundMessage = {
+    deliveryId,
+    body: messageBody,
+    from,
+    to,
+    channelType: channelType as "sms" | "web" | "voice",
+    rawParams: body ?? {},
+  };
+
+  const runtimeInput: RuntimeInput = {
+    jobId: job.id,
+    organisationId,
+    agentId,
+    channelId,
+    message,
+    agentSpec: agent.spec as unknown as AgentSpecV1,
+    businessContext,
+  };
+
+  // Step 4: Run the inbound engine
+  const output = await runInbound(runtimeInput);
+
+  // Step 5: Log the result (no PII — log IDs and decision type only)
+  logger.info(
+    {
+      jobId: job.id,
+      organisationId,
+      agentId,
+      decisionType: output.decision.type,
+      confidence: output.decision.confidence,
+      durationMs: output.durationMs,
+      success: output.success,
+    },
+    "Worker: message.process completed"
+  );
+
+  // Step 6: Record audit event
+  await recordAuditEvent({
+    organisationId,
+    action: "message.processed",
+    resourceType: "agent",
+    resourceId: agentId,
+    metadata: {
+      jobId: job.id,
+      channelId,
+      channelType,
+      decisionType: output.decision.type,
+      confidence: output.decision.confidence,
+      durationMs: output.durationMs,
+    },
+  }).catch((err) =>
+    logger.error(
+      { err, jobId: job.id },
+      "Worker: failed to record message.processed audit event"
+    )
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Data loaders — org-scoped DB queries
+// ---------------------------------------------------------------------------
+
+async function loadAgent(
+  organisationId: string,
+  agentId: string
+): Promise<AgentRow | null> {
+  const db = getDb();
+  const { rows } = await db.query<AgentRow>(
+    `SELECT id, organisation_id, type, name, status, spec
+     FROM agents
+     WHERE id = $1 AND organisation_id = $2 AND status = 'active'`,
+    [agentId, organisationId]
+  );
+  return rows[0] ?? null;
+}
+
+async function loadBusinessContext(
+  organisationId: string,
+  agentId: string
+): Promise<AssembledBusinessContext> {
+  const db = getDb();
+  const { rows } = await db.query<BusinessContextRow>(
+    `SELECT id, organisation_id, agent_id, category, title, content,
+            sort_order, active, source, reviewed_at, created_at, updated_at
+     FROM business_context
+     WHERE organisation_id = $1 AND agent_id = $2 AND active = true
+     ORDER BY category, sort_order ASC`,
+    [organisationId, agentId]
+  );
+
+  const entries: BusinessContextEntry[] = rows.map((row) => ({
+    id: row.id,
+    organisationId: row.organisation_id,
+    agentId: row.agent_id,
+    category: row.category as BusinessContextEntry["category"],
+    title: row.title,
+    content: row.content,
+    sortOrder: row.sort_order,
+    active: row.active,
+    source: row.source as BusinessContextEntry["source"],
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+
+  return {
+    organisationId,
+    agentId,
+    entries,
+    assembledAt: new Date().toISOString(),
+  };
 }
 
 function sleep(ms: number): Promise<void> {

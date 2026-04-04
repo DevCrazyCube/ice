@@ -9,6 +9,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@ice/schemas": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.5.2"
   }

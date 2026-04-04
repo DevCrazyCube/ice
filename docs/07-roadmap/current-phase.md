@@ -1,12 +1,59 @@
-# Current Phase: 1 — Foundations
+# Current Phase: 2 — Agent Capabilities
 
-## Phase Goal
+## Active Phase Goal
 
-Establish a secure, multi-tenant base with authentication, authorisation, webhook safety, queue/outbox processing, audit logging, and tracing. All subsequent phases build on this baseline.
+Deliver **environment-aware agents** with business context as the core differentiator. The shared engine adapts to any business through structured business context — no niche templates, no per-industry prompt libraries.
 
-**Phase 1 is not complete until all deliverables below are implemented and tested.**
+**Phase 2 starting point:** manual structured business context entered by org admins, consumed by the inbound agent runtime at message processing time.
 
-The structural monorepo skeleton (apps, packages, docs) is done. The runtime work below is still in progress.
+---
+
+## Phase 2 Deliverables
+
+### Done (Phase 2 initial runtime slice)
+- [x] BusinessContext v1 Zod schema (`packages/schemas/src/business-context.ts`)
+- [x] DB migration 008: `business_context` table with org/agent scoping, category, source tracking
+- [x] Runtime contracts: `RuntimeInput`, `RuntimeContext`, `RuntimeDecision`, `RuntimeOutput` (`packages/agents/src/shared/`)
+- [x] Three-layer prompt assembly: SYSTEM (core behaviour) + DEVELOPER (business context) + CHANNEL (formatting rules)
+- [x] Inbound agent engine (`packages/agents/src/inbound/`) — context-aware stub responder
+- [x] Worker `message.process` upgraded: load agent → load business context → run engine → audit
+
+### Not Yet Done (remaining Phase 2 work)
+- [ ] Business context CRUD API endpoints (`/api/v1/agents/:agentId/context`)
+- [ ] Real LLM integration (replace stub responder with API call)
+- [ ] Output validation (schema + policy enforcement on LLM responses)
+- [ ] Tool gateway — schema-validated tool execution with strict allowlists
+- [ ] Guardrails — input screening (prompt injection defense), content policy enforcement
+- [ ] Evaluation harness — automated quality checks against business context grounding
+- [ ] Dashboard forms for org admins to enter business context
+
+---
+
+## Phase 2 In Scope
+
+- Structured manual business context (profile, services, FAQ, tone, knowledge)
+- Three-layer prompt architecture (SYSTEM / DEVELOPER / CHANNEL)
+- Inbound agent runtime loop through the outbox worker
+- Business context CRUD for org admins
+- LLM API integration (single provider)
+- Output validation and guardrails
+- Tool gateway with strict allowlists
+- Audit events for agent processing, context changes
+
+## Phase 2 Out of Scope
+
+- Automated context ingestion (website scraping, document processing) — Phase 3+
+- pgvector / RAG / retrieval — Phase 4+
+- Per-industry prompt templates or niche-specific roles — never
+- Acquisition mode state machine — Phase 3
+- Stripe billing — Phase 3
+- Conversation state machine — Phase 3
+
+---
+
+# Phase 1 — Foundations (COMPLETED)
+
+Phase 1 established the secure, multi-tenant base. All deliverables below are implemented and tested.
 
 ---
 
@@ -99,25 +146,8 @@ Do not implement any of the following until the phase changes:
 
 ---
 
-## Next: Phase 2 — Agent Capabilities (Context-Driven)
+## Next: Phase 3 — Revenue-Ready Acquisition
 
-Begins only after Phase 1 completion criteria above are met.
+Begins only after Phase 2 completion criteria are met.
 
-Phase 2 delivers **environment-aware agents** with business context as the core differentiator:
-
-1. **Business context domain model + CRUD** — `business_context` table, API endpoints (`/api/v1/agents/:agentId/context`), dashboard forms for org admins to enter business profile, services, FAQ, and tone
-2. **Three-layer prompt assembly** — SYSTEM (core behavior) + DEVELOPER (business context) + USER (message) — see `docs/05-agents/agents-overview.md`
-3. **Inbound agent runtime loop** — worker loads agent spec + business context → assembles prompt → calls LLM → validates output → formats per channel → sends reply
-4. **Tool gateway** — schema-validated tool execution with strict allowlists
-5. **Guardrails** — input screening (prompt injection defense), output validation (schema + policy), content policy enforcement
-6. **Evaluation harness** — automated quality checks against business context grounding
-
-**Phase 2 does NOT include:**
-- Automated context ingestion (website scraping, document processing) — that is Phase 3+
-- pgvector / RAG / retrieval — not needed until context volume exceeds prompt limits (Phase 4+)
-- Per-industry prompt templates or niche-specific roles — never
-- Acquisition mode state machine — Phase 3
-
-**The correct Phase 2 starting point is:** manual structured business context entered by org admins, consumed by the shared engine at runtime. This validates the adaptive architecture before adding automation.
-
-**Do not start Phase 2 work without updating this file.**
+Phase 3 delivers the acquisition mode state machine, Stripe billing, and idempotent provisioning.

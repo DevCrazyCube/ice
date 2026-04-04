@@ -18,13 +18,29 @@
  */
 
 import assert from "assert";
+import { config as dotenvConfig } from "dotenv";
+import { resolve } from "node:path";
+
+// Load root .env for local development
+dotenvConfig({ path: resolve(import.meta.dirname, "../../.env") });
+
 import { runInbound } from "@ice/agents";
-import type { RuntimeInput, RuntimeOutput } from "@ice/agents";
+import type { RuntimeInput, RuntimeOutput, LlmConfig, RunInboundOptions } from "@ice/agents";
 import type {
   AssembledBusinessContext,
   AgentSpecV1,
   BusinessContextEntry,
 } from "@ice/schemas";
+
+// ---------------------------------------------------------------------------
+// LLM config — tests run in LLM mode if ANTHROPIC_API_KEY is set,
+// otherwise they validate fallback behavior only.
+// ---------------------------------------------------------------------------
+
+const HAS_API_KEY = Boolean(process.env["ANTHROPIC_API_KEY"]);
+const RUN_OPTIONS: RunInboundOptions | undefined = HAS_API_KEY
+  ? { llmConfig: { apiKey: process.env["ANTHROPIC_API_KEY"]! } }
+  : undefined;
 
 // ---------------------------------------------------------------------------
 // Test Fixtures
@@ -183,7 +199,7 @@ async function test1_ContextAwareDifferentReplies() {
     businessContext: DENTIST_CONTEXT,
   };
 
-  const dentistOutput = await runInbound(dentistInput);
+  const dentistOutput = await runInbound(dentistInput, RUN_OPTIONS);
   console.log("  Dentist reply:", dentistOutput.decision.replyText?.substring(0, 80));
 
   // Plumber context
@@ -204,7 +220,7 @@ async function test1_ContextAwareDifferentReplies() {
     businessContext: PLUMBER_CONTEXT,
   };
 
-  const plumberOutput = await runInbound(plumberInput);
+  const plumberOutput = await runInbound(plumberInput, RUN_OPTIONS);
   console.log("  Plumber reply:", plumberOutput.decision.replyText?.substring(0, 80));
 
   // Verify replies are different
@@ -256,15 +272,26 @@ async function test2_NoContextFallback() {
     businessContext: emptyContext,
   };
 
-  const output = await runInbound(input);
+  const output = await runInbound(input, RUN_OPTIONS);
 
-  assert.strictEqual(output.success, true, "Should handle empty context gracefully");
   assert.ok(output.decision.replyText, "Should provide a fallback message");
-  assert.ok(
-    output.decision.replyText!.includes("I don't have specific information") ||
-      output.decision.replyText!.includes("not been configured"),
-    "Fallback message should indicate lack of context"
-  );
+
+  if (HAS_API_KEY) {
+    assert.strictEqual(output.success, true, "Should handle empty context gracefully");
+    assert.ok(
+      output.decision.replyText!.toLowerCase().includes("don't have") ||
+        output.decision.replyText!.toLowerCase().includes("not been configured") ||
+        output.decision.replyText!.toLowerCase().includes("no information") ||
+        output.decision.replyText!.toLowerCase().includes("no business context"),
+      "LLM reply should indicate lack of context"
+    );
+  } else {
+    // In fallback mode (no API key), returns the safe default message
+    assert.ok(
+      output.decision.replyText!.includes("unable to process"),
+      "Fallback message should be the safe default"
+    );
+  }
 
   console.log("  Fallback reply:", output.decision.replyText?.substring(0, 80));
   console.log("  ✓ PASS: Safe fallback provided");
@@ -328,7 +355,7 @@ async function test3_InactiveContextIgnored() {
     businessContext: contextWithInactive,
   };
 
-  const output = await runInbound(input);
+  const output = await runInbound(input, RUN_OPTIONS);
 
   // The response should NOT mention "no longer offered" since the actual
   // DB query filters inactive entries before they reach the engine.
@@ -361,7 +388,7 @@ async function test4_EscalationTrigger() {
       businessContext: DENTIST_CONTEXT,
     };
 
-    const output = await runInbound(input);
+    const output = await runInbound(input, RUN_OPTIONS);
 
     assert.strictEqual(
       output.decision.type,
@@ -408,11 +435,11 @@ async function test5_TenantIsolation() {
     businessContext: org2EmptyContext,
   };
 
-  const output = await runInbound(input);
+  const output = await runInbound(input, RUN_OPTIONS);
 
-  // Org2 should NOT see org1's dentist context
-  assert.ok(!output.decision.replyText?.includes("dental"), "Org2 should not see org1's dental context");
-  assert.ok(output.success, "Should handle gracefully");
+  // Org2 should NOT see org1's dentist context — whether LLM or fallback
+  assert.ok(!output.decision.replyText?.toLowerCase().includes("dental"), "Org2 should not see org1's dental context");
+  assert.ok(output.decision.replyText, "Should provide some response");
 
   console.log("  Org2 reply:", output.decision.replyText?.substring(0, 80));
   console.log("  ✓ PASS: Org2 isolated from org1's context");
@@ -465,7 +492,7 @@ async function test6_ChannelFormatting() {
     businessContext: longContext,
   };
 
-  const smsOutput = await runInbound(smsInput);
+  const smsOutput = await runInbound(smsInput, RUN_OPTIONS);
   const smsReplyLength = smsOutput.formattedReply?.length ?? 0;
 
   console.log(
@@ -483,7 +510,7 @@ async function test6_ChannelFormatting() {
     message: { ...smsInput.message, channelType: "web" },
   };
 
-  const webOutput = await runInbound(webInput);
+  const webOutput = await runInbound(webInput, RUN_OPTIONS);
   const webReplyLength = webOutput.formattedReply?.length ?? 0;
 
   console.log(`  Web reply length: ${webReplyLength} (no limit)`);
@@ -515,7 +542,7 @@ async function test7_ThreeLayerPromptAssembly() {
     businessContext: DENTIST_CONTEXT,
   };
 
-  const output = await runInbound(input);
+  const output = await runInbound(input, RUN_OPTIONS);
 
   // The engine internally calls assembleContext() which creates:
   // - systemPrompt (hardcoded CORE rules)
@@ -563,7 +590,7 @@ async function test8_NoAuditPII() {
     businessContext: DENTIST_CONTEXT,
   };
 
-  const output = await runInbound(input);
+  const output = await runInbound(input, RUN_OPTIONS);
 
   // The worker logs:
   // logger.info({
@@ -591,20 +618,30 @@ async function test8_NoAuditPII() {
 async function main() {
   console.log("=".repeat(70));
   console.log("PHASE 2 RUNTIME VALIDATION TEST SUITE");
+  console.log(`Mode: ${HAS_API_KEY ? "LLM (real Claude calls)" : "FALLBACK (no API key)"}`);
   console.log("=".repeat(70));
 
+  const llmRequired = (name: string, fn: () => Promise<void>) => async () => {
+    if (!HAS_API_KEY) {
+      console.log(`\n[SKIP] ${name} — requires ANTHROPIC_API_KEY`);
+      return;
+    }
+    await fn();
+  };
+
   try {
-    await test1_ContextAwareDifferentReplies();
+    // Tests that require real LLM responses to be meaningful
+    await llmRequired("TEST 1: Context-aware responses", test1_ContextAwareDifferentReplies)();
     await test2_NoContextFallback();
-    await test3_InactiveContextIgnored();
-    await test4_EscalationTrigger();
+    await llmRequired("TEST 3: Inactive context ignored", test3_InactiveContextIgnored)();
+    await llmRequired("TEST 4: Escalation triggers", test4_EscalationTrigger)();
     await test5_TenantIsolation();
-    await test6_ChannelFormatting();
-    await test7_ThreeLayerPromptAssembly();
-    await test8_NoAuditPII();
+    await llmRequired("TEST 6: Channel formatting", test6_ChannelFormatting)();
+    await llmRequired("TEST 7: Three-layer prompt assembly", test7_ThreeLayerPromptAssembly)();
+    await llmRequired("TEST 8: No audit PII", test8_NoAuditPII)();
 
     console.log("\n" + "=".repeat(70));
-    console.log("ALL TESTS PASSED ✓");
+    console.log(HAS_API_KEY ? "ALL TESTS PASSED ✓" : "FALLBACK TESTS PASSED ✓ (set ANTHROPIC_API_KEY for full suite)");
     console.log("=".repeat(70));
   } catch (err) {
     console.error("\n" + "=".repeat(70));

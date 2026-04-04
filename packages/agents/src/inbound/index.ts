@@ -4,8 +4,8 @@
  * Uses business context (the business's environment) to answer, qualify,
  * route, or escalate. Powered by the shared three-layer prompt architecture.
  *
- * Phase 2 initial slice: assembles the three-layer prompt, runs a simple
- * context-aware responder (no real LLM yet), returns a structured RuntimeOutput.
+ * Phase 2: assembles the three-layer prompt, calls Claude for a structured
+ * decision, validates output with Zod, falls back safely on any failure.
  */
 
 import type {
@@ -15,6 +15,8 @@ import type {
   RuntimeOutput,
 } from "../shared/index.js";
 import type { AssembledBusinessContext } from "@ice/schemas";
+import { callLlm } from "./llm.js";
+import type { LlmConfig } from "./llm.js";
 
 // ---------------------------------------------------------------------------
 // Prompt assembly — three-layer architecture
@@ -88,80 +90,33 @@ function assembleContext(input: RuntimeInput): RuntimeContext {
 }
 
 // ---------------------------------------------------------------------------
-// Decision engine — Phase 2 stub (no real LLM call yet)
+// Decision engine — real LLM call with structured output validation
 // ---------------------------------------------------------------------------
 
 /**
- * Simple context-aware responder.
+ * Call Claude to make a decision based on the three-layer prompt context.
  *
- * Phase 2 initial slice: searches business context for relevant entries
- * and constructs a reply. Will be replaced by a real LLM call once the
- * runtime loop is validated end-to-end.
+ * Falls back to a safe no_response decision on any failure (timeout, API
+ * error, malformed output, validation failure).
  */
-function makeDecision(context: RuntimeContext, input: RuntimeInput): RuntimeDecision {
-  const userMsg = context.userMessage.toLowerCase().trim();
-
-  // Escalation check — user explicitly requests a human
-  if (
-    userMsg.includes("human") ||
-    userMsg.includes("agent") ||
-    userMsg.includes("person") ||
-    userMsg.includes("speak to someone")
-  ) {
+async function makeDecision(
+  runtimeContext: RuntimeContext,
+  llmConfig: LlmConfig | null
+): Promise<{ decision: RuntimeDecision; fallback: boolean }> {
+  // No API key configured — return safe fallback
+  if (!llmConfig || !llmConfig.apiKey) {
     return {
-      type: "escalate",
-      replyText: "I'll connect you with a human now. One moment please.",
-      escalationReason: "User requested human agent",
-      confidence: "high",
+      decision: {
+        type: "no_response",
+        replyText: "I'm sorry, I'm unable to process your request right now. Please try again shortly.",
+        escalationReason: null,
+        confidence: "low",
+      },
+      fallback: true,
     };
   }
 
-  // Search business context entries for keyword matches
-  const entries = input.businessContext.entries;
-  const matchedEntries = entries.filter((entry) => {
-    const titleLower = entry.title.toLowerCase();
-    const contentLower = entry.content.toLowerCase();
-    // Check if any word from the user message appears in title or content
-    const words = userMsg.split(/\s+/).filter((w) => w.length > 2);
-    return words.some((w) => titleLower.includes(w) || contentLower.includes(w));
-  });
-
-  if (matchedEntries.length > 0) {
-    // Use the first matched entry as the basis for the reply
-    const best = matchedEntries[0]!;
-    return {
-      type: "reply",
-      replyText: `Based on our ${best.category} information: ${best.content}`,
-      escalationReason: null,
-      confidence: "medium",
-    };
-  }
-
-  // No exact match — provide a contextual fallback that summarizes what we know
-  // Summarize by category to give a helpful overview
-  const profileEntry = entries.find((e) => e.category === "profile");
-  const serviceEntries = entries.filter((e) => e.category === "services");
-  const businessName = profileEntry?.content.split(".")[0] ?? "our business";
-
-  if (serviceEntries.length > 0) {
-    const serviceList = serviceEntries
-      .slice(0, 2)
-      .map((e) => e.title)
-      .join(", ");
-    return {
-      type: "reply",
-      replyText: `We offer ${serviceList}. For more information, please visit our website or contact us. Is there something specific I can help with?`,
-      escalationReason: null,
-      confidence: "low",
-    };
-  }
-
-  return {
-    type: "reply",
-    replyText: `Thank you for contacting ${businessName}. I don't have specific information about that topic yet. Would you like me to connect you with someone who can help?`,
-    escalationReason: null,
-    confidence: "low",
-  };
+  return callLlm(runtimeContext, llmConfig);
 }
 
 /**
@@ -185,21 +140,33 @@ function formatReply(
 // Public API — the entry point called by the worker
 // ---------------------------------------------------------------------------
 
+/** Options for the inbound engine */
+export interface RunInboundOptions {
+  /** LLM configuration. If omitted or apiKey is empty, returns a safe fallback. */
+  llmConfig?: LlmConfig;
+}
+
 /**
  * Run the inbound agent engine for a single message turn.
  *
- * Assembles the three-layer prompt, makes a decision, formats the reply,
- * and returns a structured RuntimeOutput.
+ * Assembles the three-layer prompt, calls Claude for a structured decision,
+ * validates the output, formats the reply, and returns a RuntimeOutput.
  */
-export async function runInbound(input: RuntimeInput): Promise<RuntimeOutput> {
+export async function runInbound(
+  input: RuntimeInput,
+  options?: RunInboundOptions
+): Promise<RuntimeOutput> {
   const start = Date.now();
 
   try {
     // Step 1: Assemble three-layer context
     const runtimeContext = assembleContext(input);
 
-    // Step 2: Make a decision (stub responder — no LLM yet)
-    const decision = makeDecision(runtimeContext, input);
+    // Step 2: Make a decision via LLM (falls back safely on any failure)
+    const { decision, fallback } = await makeDecision(
+      runtimeContext,
+      options?.llmConfig ?? null
+    );
 
     // Step 3: Format reply for channel
     const formattedReply = formatReply(
@@ -208,11 +175,11 @@ export async function runInbound(input: RuntimeInput): Promise<RuntimeOutput> {
     );
 
     return {
-      success: true,
+      success: !fallback,
       decision,
       formattedReply,
       durationMs: Date.now() - start,
-      error: null,
+      error: fallback ? "LLM call failed — returned fallback response" : null,
     };
   } catch (err) {
     return {

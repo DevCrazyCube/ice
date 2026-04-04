@@ -361,6 +361,18 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
     "Worker: message.process completed"
   );
 
+  // Dev-only: log the generated reply at DEBUG level for local validation.
+  // DEBUG is below the default INFO threshold — never visible in production.
+  // Safe: pino level filtering means this line is a no-op unless LOG_LEVEL=debug.
+  logger.debug(
+    {
+      jobId: job.id,
+      formattedReply: output.formattedReply,
+      contextEntryCount: businessContext.entries.length,
+    },
+    "Worker: generated reply (dev visibility)"
+  );
+
   // Step 6: Record audit event
   await recordAuditEvent({
     organisationId,

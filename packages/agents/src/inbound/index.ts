@@ -137,9 +137,24 @@ function makeDecision(context: RuntimeContext, input: RuntimeInput): RuntimeDeci
     };
   }
 
-  // No context match — provide a helpful fallback
-  const businessName =
-    entries.find((e) => e.category === "profile")?.content ?? "our business";
+  // No exact match — provide a contextual fallback that summarizes what we know
+  // Summarize by category to give a helpful overview
+  const profileEntry = entries.find((e) => e.category === "profile");
+  const serviceEntries = entries.filter((e) => e.category === "services");
+  const businessName = profileEntry?.content.split(".")[0] ?? "our business";
+
+  if (serviceEntries.length > 0) {
+    const serviceList = serviceEntries
+      .slice(0, 2)
+      .map((e) => e.title)
+      .join(", ");
+    return {
+      type: "reply",
+      replyText: `We offer ${serviceList}. For more information, please visit our website or contact us. Is there something specific I can help with?`,
+      escalationReason: null,
+      confidence: "low",
+    };
+  }
 
   return {
     type: "reply",

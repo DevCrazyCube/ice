@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "migrate": "tsx src/lib/migrate.ts",
     "seed": "tsx scripts/run-seed.ts",
-    "generate-token": "tsx scripts/generate-token.ts"
+    "generate-token": "tsx scripts/generate-token.ts",
+    "test:phase2": "tsx test-phase2-validation.ts"
   },
   "dependencies": {
     "@ice/agents": "workspace:*",

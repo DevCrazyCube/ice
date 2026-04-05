@@ -13,7 +13,8 @@
     "generate-token": "tsx scripts/generate-token.ts",
     "test:phase2": "tsx test-phase2-validation.ts",
     "prove:env-aware": "tsx scripts/prove-env-aware.ts",
-    "prove": "tsx test-phase2-validation.ts && tsx scripts/prove-env-aware.ts"
+    "prove": "tsx test-phase2-validation.ts && tsx scripts/prove-env-aware.ts",
+    "prove:crud": "tsx scripts/prove-business-context-crud.ts"
   },
   "dependencies": {
     "@ice/agents": "workspace:*",

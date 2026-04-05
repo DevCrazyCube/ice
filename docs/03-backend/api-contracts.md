@@ -94,6 +94,40 @@ POST /auth/logout           Invalidate session
 
 ---
 
+## Phase 2 Routes (Implemented)
+
+### BusinessContext CRUD
+
+Manage structured business context entries per agent. Org-scoped, auth-protected.
+
+```
+GET    /api/v1/agents/:agentId/context              # list entries (org_member+)
+POST   /api/v1/agents/:agentId/context              # create entry (org_admin)
+PATCH  /api/v1/agents/:agentId/context/:contextId   # update entry (org_admin)
+DELETE /api/v1/agents/:agentId/context/:contextId   # soft-delete / deactivate (org_admin)
+```
+
+**Query params (GET):** `?active=true` (filter active only), `?category=services` (filter by category)
+
+**Request body (POST):**
+```json
+{
+  "category": "profile|services|faq|tone|knowledge",
+  "title": "string (1-200 chars)",
+  "content": "string (1-10000 chars)",
+  "sortOrder": 0,
+  "active": true
+}
+```
+
+**Request body (PATCH):** Any subset of the POST fields. Empty body → 400.
+
+**DELETE:** Soft-delete (sets `active = false`). Reactivate via `PATCH { "active": true }`.
+
+**Security:** Agent must belong to the authenticated org. Cross-org → 404. All writes produce audit events.
+
+---
+
 ## Phase 2+ Routes (Not Yet)
 
 ```
@@ -103,16 +137,7 @@ POST   /api/v1/agents
 GET    /api/v1/agents/:id
 PATCH  /api/v1/agents/:id
 
-# BusinessContext (Phase 2 — structured, categorized entries)
-# Each entry has: category, title, content, sortOrder, active
-# Categories: profile, services, faq, tone, knowledge
-# Groupings: Identity / Operations / Intent & Style
-GET    /api/v1/agents/:agentId/context          # list context entries for agent
-POST   /api/v1/agents/:agentId/context          # add context entry (validates category, content bounds)
-PATCH  /api/v1/agents/:agentId/context/:id      # update context entry
-DELETE /api/v1/agents/:agentId/context/:id       # remove context entry
-
-# Channels
+# Channels (nested under agent)
 GET    /api/v1/agents/:agentId/channels
 POST   /api/v1/agents/:agentId/channels
 DELETE /api/v1/agents/:agentId/channels/:id

@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import { webhookRouter } from "./modules/webhooks/router.js";
 import { authRouter } from "./modules/auth/router.js";
 import { channelRouter } from "./modules/channels/router.js";
+import { businessContextRouter } from "./modules/business-context/router.js";
 import { healthRouter } from "./routes/health.js";
 import { requireAuth } from "./lib/auth.js";
 
@@ -22,6 +23,7 @@ export function createApp(): Express {
 
   // 4. Protected API routes — require auth. Individual routes add requireRole().
   app.use("/api/v1", requireAuth, channelRouter);
+  app.use("/api/v1", requireAuth, businessContextRouter);
 
   return app;
 }

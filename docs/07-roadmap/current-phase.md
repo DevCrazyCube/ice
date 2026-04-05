@@ -15,12 +15,22 @@ Deliver **environment-aware agents** with business context as the core different
 - [x] DB migration 008: `business_context` table with org/agent scoping, category, source tracking
 - [x] Runtime contracts: `RuntimeInput`, `RuntimeContext`, `RuntimeDecision`, `RuntimeOutput` (`packages/agents/src/shared/`)
 - [x] Three-layer prompt assembly: SYSTEM (core behaviour) + DEVELOPER (business context) + CHANNEL (formatting rules)
-- [x] Inbound agent engine (`packages/agents/src/inbound/`) — context-aware stub responder
-- [x] Worker `message.process` upgraded: load agent → load business context → run engine → audit
+- [x] Inbound agent engine (`packages/agents/src/inbound/`) — stub-first default, optional hosted LLM
+- [x] Worker `message.process` upgraded: load agent → Zod-validate spec → load business context → run engine → audit
+- [x] Runtime observability: `engine`, `contextEntryCount`, `channelFormatted` on every RuntimeOutput
+- [x] Environment-aware behaviour proven (8 tests + 4-scenario env-aware proof)
+
+### Done (Phase 2 control-plane slice)
+- [x] BusinessContext CRUD API (`/api/v1/agents/:agentId/context`) — GET/POST/PATCH/DELETE
+- [x] Org-scoped, auth-protected, role-enforced (org_admin for writes, org_member+ for reads)
+- [x] Zod validation on all request bodies; cross-org → 404
+- [x] Soft-delete via DELETE (sets active=false); reactivation via PATCH
+- [x] Audit events for context.created, context.updated, context.deactivated
+- [x] Query filters: `?active=true`, `?category=<cat>`
+- [x] 10-scenario CRUD validation script (`prove:crud`)
 
 ### Not Yet Done (remaining Phase 2 work)
-- [ ] Business context CRUD API endpoints (`/api/v1/agents/:agentId/context`)
-- [ ] Real LLM integration (replace stub responder with API call)
+- [ ] Real LLM integration testing (hosted Claude path validated end-to-end with API key)
 - [ ] Output validation (schema + policy enforcement on LLM responses)
 - [ ] Tool gateway — schema-validated tool execution with strict allowlists
 - [ ] Guardrails — input screening (prompt injection defense), content policy enforcement

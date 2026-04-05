@@ -2,9 +2,12 @@ import { context } from "@opentelemetry/api";
 import { getDb, extractTraceContext, withSpan, recordAuditEvent } from "@ice/core";
 import { runInbound } from "@ice/agents";
 import type { RuntimeInput, InboundMessage, LlmConfig } from "@ice/agents";
+import { agentSpecV1Schema } from "@ice/schemas";
 import type { AgentSpecV1, AssembledBusinessContext, BusinessContextEntry } from "@ice/schemas";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
+
+const VALID_CHANNEL_TYPES = new Set(["sms", "web", "voice"]);
 
 interface OutboxJob {
   id: string;
@@ -312,7 +315,18 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
   const to = body?.["To"] ?? "";
   const deliveryId = (payload["deliveryId"] as string) ?? job.id;
 
-  // Step 1: Load agent spec from DB (org-scoped)
+  // Step 1: Validate channelType before proceeding
+  const resolvedChannelType: "sms" | "web" | "voice" =
+    VALID_CHANNEL_TYPES.has(channelType) ? channelType as "sms" | "web" | "voice" : "sms";
+
+  if (!VALID_CHANNEL_TYPES.has(channelType)) {
+    logger.warn(
+      { jobId: job.id, channelType },
+      "Worker: unknown channelType in payload — defaulting to sms"
+    );
+  }
+
+  // Step 2: Load agent spec from DB (org-scoped)
   const agent = await loadAgent(organisationId, agentId);
   if (!agent) {
     logger.warn(
@@ -322,16 +336,27 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
     return;
   }
 
-  // Step 2: Load business context entries from DB (org-scoped, active only)
+  // Step 3: Validate agent spec with Zod
+  const specResult = agentSpecV1Schema.safeParse(agent.spec);
+  if (!specResult.success) {
+    logger.error(
+      { jobId: job.id, agentId, errors: specResult.error.issues },
+      "Worker: agent spec failed validation — skipping job"
+    );
+    return;
+  }
+  const agentSpec = specResult.data;
+
+  // Step 4: Load business context entries from DB (org-scoped, active only)
   const businessContext = await loadBusinessContext(organisationId, agentId);
 
-  // Step 3: Build RuntimeInput
+  // Step 5: Build RuntimeInput
   const message: InboundMessage = {
     deliveryId,
     body: messageBody,
     from,
     to,
-    channelType: channelType as "sms" | "web" | "voice",
+    channelType: resolvedChannelType,
     rawParams: body ?? {},
   };
 
@@ -341,11 +366,11 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
     agentId,
     channelId,
     message,
-    agentSpec: agent.spec as unknown as AgentSpecV1,
+    agentSpec,
     businessContext,
   };
 
-  // Step 4: Run the inbound engine.
+  // Step 6: Run the inbound engine.
   // Default mode: deterministic stub (no API key required).
   // Opt-in LLM mode: set ANTHROPIC_API_KEY in the environment.
   const llmConfig: LlmConfig | undefined = config.anthropicApiKey
@@ -354,36 +379,35 @@ async function handleMessageProcess(job: OutboxJob): Promise<void> {
 
   const output = await runInbound(runtimeInput, { llmConfig });
 
-  // Step 5: Log the result (no PII — log IDs and decision type only).
-  // engine: "stub" = default mode; "llm" = hosted LLM; "llm-stub-fallback" = LLM failed, stub ran.
-  // success is always true when any decision was produced; false only on uncaught errors.
+  // Step 7: Log the result (no PII — log IDs, decision metadata, and engine info only).
   logger.info(
     {
       jobId: job.id,
       organisationId,
       agentId,
+      engine: output.engine,
       decisionType: output.decision.type,
       confidence: output.decision.confidence,
+      contextEntryCount: output.contextEntryCount,
+      channelFormatted: output.channelFormatted,
       durationMs: output.durationMs,
       success: output.success,
-      ...(output.error ? { engineNote: output.error } : {}),
+      ...(output.error ? { error: output.error } : {}),
     },
     "Worker: message.process completed"
   );
 
   // Dev-only: log the generated reply at DEBUG level for local validation.
   // DEBUG is below the default INFO threshold — never visible in production.
-  // Safe: pino level filtering means this line is a no-op unless LOG_LEVEL=debug.
   logger.debug(
     {
       jobId: job.id,
       formattedReply: output.formattedReply,
-      contextEntryCount: businessContext.entries.length,
     },
     "Worker: generated reply (dev visibility)"
   );
 
-  // Step 6: Record audit event
+  // Step 8: Record audit event
   await recordAuditEvent({
     organisationId,
     action: "message.processed",

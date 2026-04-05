@@ -259,6 +259,8 @@ export async function runInbound(
 ): Promise<RuntimeOutput> {
   const start = Date.now();
 
+  const contextEntryCount = input.businessContext.entries.length;
+
   try {
     // Step 1: Assemble three-layer context
     const runtimeContext = assembleContext(input);
@@ -274,15 +276,18 @@ export async function runInbound(
       decision.replyText,
       input.message.channelType
     );
+    const channelFormatted = formattedReply !== decision.replyText;
 
     return {
       success: true,
       decision,
       formattedReply,
       durationMs: Date.now() - start,
-      // Report which engine ran — useful for observability, not an error signal.
-      // "llm-stub-fallback" means the LLM was configured but failed; stub ran instead.
-      error: engine === "llm-stub-fallback" ? "LLM unavailable — stub used" : null,
+      // error is reserved for actual failures — engine routing is in the engine field
+      error: engine === "llm-stub-fallback" ? "LLM call failed, stub used" : null,
+      engine,
+      contextEntryCount,
+      channelFormatted,
     };
   } catch (err) {
     return {
@@ -296,6 +301,9 @@ export async function runInbound(
       formattedReply: null,
       durationMs: Date.now() - start,
       error: err instanceof Error ? err.message : String(err),
+      engine: "stub",
+      contextEntryCount,
+      channelFormatted: false,
     };
   }
 }

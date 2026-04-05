@@ -9,4 +9,5 @@ export type {
   RuntimeDecision,
   RuntimeOutput,
   DecisionType,
+  EngineType,
 } from "./shared/index.js";

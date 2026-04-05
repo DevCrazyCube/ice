@@ -12,7 +12,8 @@
     "seed": "tsx scripts/run-seed.ts",
     "generate-token": "tsx scripts/generate-token.ts",
     "test:phase2": "tsx test-phase2-validation.ts",
-    "prove:env-aware": "tsx scripts/prove-env-aware.ts"
+    "prove:env-aware": "tsx scripts/prove-env-aware.ts",
+    "prove": "tsx test-phase2-validation.ts && tsx scripts/prove-env-aware.ts"
   },
   "dependencies": {
     "@ice/agents": "workspace:*",

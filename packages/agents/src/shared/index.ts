@@ -91,6 +91,8 @@ export interface RuntimeDecision {
 // RuntimeOutput — what the engine returns to the worker
 // ---------------------------------------------------------------------------
 
+export type EngineType = "stub" | "llm" | "llm-stub-fallback";
+
 export interface RuntimeOutput {
   /** Whether processing succeeded */
   success: boolean;
@@ -102,4 +104,13 @@ export interface RuntimeOutput {
   durationMs: number;
   /** Error message if success is false */
   error: string | null;
+
+  // --- Observability metadata (always populated) ---
+
+  /** Which decision engine produced this output */
+  engine: EngineType;
+  /** Number of active business context entries loaded */
+  contextEntryCount: number;
+  /** Whether channel-specific formatting was applied (e.g. SMS truncation) */
+  channelFormatted: boolean;
 }

@@ -25,7 +25,7 @@ import { resolve } from "node:path";
 dotenvConfig({ path: resolve(import.meta.dirname, "../../.env") });
 
 import { runInbound } from "@ice/agents";
-import type { RuntimeInput, RuntimeOutput, LlmConfig, RunInboundOptions } from "@ice/agents";
+import type { RuntimeInput, RuntimeOutput, RunInboundOptions } from "@ice/agents";
 import type {
   AssembledBusinessContext,
   AgentSpecV1,
@@ -33,11 +33,13 @@ import type {
 } from "@ice/schemas";
 
 // ---------------------------------------------------------------------------
-// LLM config — tests run in LLM mode if ANTHROPIC_API_KEY is set,
-// otherwise they validate fallback behavior only.
+// Engine mode — stub by default, LLM when ANTHROPIC_API_KEY is set.
+// All tests run in both modes. The stub IS context-aware and handles
+// escalation, formatting, and tenant isolation deterministically.
 // ---------------------------------------------------------------------------
 
 const HAS_API_KEY = Boolean(process.env["ANTHROPIC_API_KEY"]);
+const ENGINE_MODE = HAS_API_KEY ? "llm" : "stub";
 const RUN_OPTIONS: RunInboundOptions | undefined = HAS_API_KEY
   ? { llmConfig: { apiKey: process.env["ANTHROPIC_API_KEY"]! } }
   : undefined;
@@ -200,7 +202,7 @@ async function test1_ContextAwareDifferentReplies() {
   };
 
   const dentistOutput = await runInbound(dentistInput, RUN_OPTIONS);
-  console.log("  Dentist reply:", dentistOutput.decision.replyText?.substring(0, 80));
+  console.log(`  Dentist [${dentistOutput.engine}]: ${dentistOutput.decision.replyText?.substring(0, 80)}`);
 
   // Plumber context
   const plumberInput: RuntimeInput = {
@@ -221,7 +223,13 @@ async function test1_ContextAwareDifferentReplies() {
   };
 
   const plumberOutput = await runInbound(plumberInput, RUN_OPTIONS);
-  console.log("  Plumber reply:", plumberOutput.decision.replyText?.substring(0, 80));
+  console.log(`  Plumber [${plumberOutput.engine}]: ${plumberOutput.decision.replyText?.substring(0, 80)}`);
+
+  // Verify output metadata
+  assert.ok(dentistOutput.success, "Dentist should succeed");
+  assert.ok(plumberOutput.success, "Plumber should succeed");
+  assert.strictEqual(dentistOutput.contextEntryCount, 4, "Dentist context has 4 entries");
+  assert.strictEqual(plumberOutput.contextEntryCount, 3, "Plumber context has 3 entries");
 
   // Verify replies are different
   assert.notStrictEqual(
@@ -274,9 +282,9 @@ async function test2_NoContextFallback() {
 
   const output = await runInbound(input, RUN_OPTIONS);
 
-  // Stub runs in both modes when context is empty — always success: true
   assert.strictEqual(output.success, true, "Should handle empty context gracefully");
   assert.ok(output.decision.replyText, "Should provide a reply");
+  assert.strictEqual(output.contextEntryCount, 0, "Context should report 0 entries");
   assert.ok(
     output.decision.replyText!.toLowerCase().includes("don't have") ||
       output.decision.replyText!.toLowerCase().includes("not been configured") ||
@@ -286,8 +294,8 @@ async function test2_NoContextFallback() {
     "Reply should indicate lack of configured context"
   );
 
-  console.log("  Fallback reply:", output.decision.replyText?.substring(0, 80));
-  console.log("  ✓ PASS: Safe fallback provided");
+  console.log(`  [${output.engine}] reply: ${output.decision.replyText?.substring(0, 80)}`);
+  console.log("  ✓ PASS: Safe reply for empty context");
 }
 
 async function test3_InactiveContextIgnored() {
@@ -383,13 +391,14 @@ async function test4_EscalationTrigger() {
 
     const output = await runInbound(input, RUN_OPTIONS);
 
+    assert.ok(output.success, "Should succeed");
     assert.strictEqual(
       output.decision.type,
       "escalate",
       `Message with "${trigger}" should trigger escalation`
     );
     assert.ok(output.decision.escalationReason, "Should have escalation reason");
-    console.log(`  ✓ "${trigger}" → escalate (reason: ${output.decision.escalationReason})`);
+    console.log(`  ✓ "${trigger}" → escalate [${output.engine}] (reason: ${output.decision.escalationReason})`);
   }
 
   console.log("  ✓ PASS: All escalation triggers work");
@@ -488,14 +497,8 @@ async function test6_ChannelFormatting() {
   const smsOutput = await runInbound(smsInput, RUN_OPTIONS);
   const smsReplyLength = smsOutput.formattedReply?.length ?? 0;
 
-  console.log(
-    `  SMS reply length: ${smsReplyLength} (max ~320)`,
-    smsReplyLength > 320 ? "WARN: Not truncated" : "OK"
-  );
-
-  if (smsReplyLength > 320) {
-    console.log("    ⚠ WARNING: SMS reply exceeds 320 chars, may fail on Twilio");
-  }
+  console.log(`  SMS [${smsOutput.engine}] reply length: ${smsReplyLength} (max ~320), formatted: ${smsOutput.channelFormatted}`);
+  assert.ok(smsReplyLength <= 320, "SMS reply should be at most 320 chars");
 
   // Web — should NOT truncate
   const webInput: RuntimeInput = {
@@ -506,7 +509,7 @@ async function test6_ChannelFormatting() {
   const webOutput = await runInbound(webInput, RUN_OPTIONS);
   const webReplyLength = webOutput.formattedReply?.length ?? 0;
 
-  console.log(`  Web reply length: ${webReplyLength} (no limit)`);
+  console.log(`  Web [${webOutput.engine}] reply length: ${webReplyLength} (no limit), formatted: ${webOutput.channelFormatted}`);
   assert.ok(webReplyLength >= smsReplyLength, "Web reply should be at least as long as SMS");
 
   console.log("  ✓ PASS: Channel formatting applied");
@@ -611,34 +614,25 @@ async function test8_NoAuditPII() {
 async function main() {
   console.log("=".repeat(70));
   console.log("PHASE 2 RUNTIME VALIDATION TEST SUITE");
-  console.log(`Mode: ${HAS_API_KEY ? "LLM (real Claude calls)" : "FALLBACK (no API key)"}`);
+  console.log(`Engine: ${ENGINE_MODE.toUpperCase()}${HAS_API_KEY ? " (ANTHROPIC_API_KEY set)" : " (default, no API key)"}`);
   console.log("=".repeat(70));
 
-  const llmRequired = (name: string, fn: () => Promise<void>) => async () => {
-    if (!HAS_API_KEY) {
-      console.log(`\n[SKIP] ${name} — requires ANTHROPIC_API_KEY`);
-      return;
-    }
-    await fn();
-  };
-
   try {
-    // Tests that require real LLM responses to be meaningful
-    await llmRequired("TEST 1: Context-aware responses", test1_ContextAwareDifferentReplies)();
+    await test1_ContextAwareDifferentReplies();
     await test2_NoContextFallback();
-    await llmRequired("TEST 3: Inactive context ignored", test3_InactiveContextIgnored)();
-    await llmRequired("TEST 4: Escalation triggers", test4_EscalationTrigger)();
+    await test3_InactiveContextIgnored();
+    await test4_EscalationTrigger();
     await test5_TenantIsolation();
-    await llmRequired("TEST 6: Channel formatting", test6_ChannelFormatting)();
-    await llmRequired("TEST 7: Three-layer prompt assembly", test7_ThreeLayerPromptAssembly)();
-    await llmRequired("TEST 8: No audit PII", test8_NoAuditPII)();
+    await test6_ChannelFormatting();
+    await test7_ThreeLayerPromptAssembly();
+    await test8_NoAuditPII();
 
     console.log("\n" + "=".repeat(70));
-    console.log(HAS_API_KEY ? "ALL TESTS PASSED ✓" : "FALLBACK TESTS PASSED ✓ (set ANTHROPIC_API_KEY for full suite)");
+    console.log(`ALL 8 TESTS PASSED [${ENGINE_MODE}]`);
     console.log("=".repeat(70));
   } catch (err) {
     console.error("\n" + "=".repeat(70));
-    console.error("TEST FAILED ✗");
+    console.error("TEST FAILED");
     console.error("=".repeat(70));
     console.error(err);
     process.exit(1);
